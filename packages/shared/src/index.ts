@@ -132,3 +132,23 @@ export const toggleFavoriteSchema = z.object({
   password: z.string().min(1),
 });
 export type ToggleFavoriteDto = z.infer<typeof toggleFavoriteSchema>;
+
+// ---------- Contracts (Phase 4) ----------
+
+export const createContractTemplateSchema = z.object({
+  name: z.string().min(1),
+  bodyMarkdown: z.string().min(1),
+});
+export type CreateContractTemplateDto = z.infer<typeof createContractTemplateSchema>;
+
+export const createContractSchema = z.object({
+  templateId: z.string().min(1),
+  variables: z.record(z.string(), z.string()),
+});
+export type CreateContractDto = z.infer<typeof createContractSchema>;
+
+export const signContractSchema = z.object({
+  signerName: z.string().min(1),
+  signatureImage: z.string().startsWith("data:image/png"),
+});
+export type SignContractDto = z.infer<typeof signContractSchema>;

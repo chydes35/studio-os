@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { api, type Booking, type Gallery } from "../../../lib/api";
+import { BookingContractSection } from "./BookingContractSection";
 
 export default function BookingDetailPage({
   params,
@@ -83,6 +84,8 @@ export default function BookingDetailPage({
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
+
+      <BookingContractSection bookingId={id} booking={booking} />
 
       {!gallery ? (
         <form

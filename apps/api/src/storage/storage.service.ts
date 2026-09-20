@@ -80,4 +80,15 @@ export class StorageService {
       }),
     );
   }
+
+  /** For private objects (contracts, originals) that need a time-limited link. */
+  async getPresignedGetUrl(key: string): Promise<string> {
+    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
+      expiresIn: PRESIGN_EXPIRY_SECONDS,
+    });
+  }
+
+  contractKey(contractId: string) {
+    return `contracts/${contractId}.pdf`;
+  }
 }

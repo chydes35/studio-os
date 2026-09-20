@@ -5,6 +5,7 @@ import { AppService } from './app.service.js';
 import { AvailabilityModule } from './availability/availability.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
 import { ClientsModule } from './clients/clients.module.js';
+import { ContractsModule } from './contracts/contracts.module.js';
 import { DbModule } from './db/db.module.js';
 import { GalleryModule } from './gallery/gallery.module.js';
 import { MediaModule } from './media/media.module.js';
@@ -22,6 +23,7 @@ import { StorageModule } from './storage/storage.module.js';
     BookingsModule,
     GalleryModule,
     MediaModule,
+    ContractsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

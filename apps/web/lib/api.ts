@@ -5,7 +5,10 @@ import type {
   CreateBookingDto,
   CreateCalendarBlockDto,
   CreateClientDto,
+  CreateContractDto,
+  CreateContractTemplateDto,
   PublicBookingRequestDto,
+  SignContractDto,
   UploadInitResponse,
 } from "@repo/shared";
 
@@ -70,6 +73,32 @@ export type Gallery = {
   id: string;
   bookingId: string;
   media: Media[];
+};
+
+export type ContractTemplate = {
+  id: string;
+  name: string;
+  bodyMarkdown: string;
+  createdAt: string;
+};
+
+export type Contract = {
+  id: string;
+  bookingId: string;
+  templateId: string;
+  template?: ContractTemplate;
+  renderedMarkdown: string;
+  signedAt: string | null;
+  signerName: string | null;
+  createdAt: string;
+};
+
+export type PublicContract = {
+  id: string;
+  templateName: string;
+  renderedMarkdown: string;
+  signedAt: string | null;
+  signerName: string | null;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -188,4 +217,29 @@ export const api = {
 
     return api.completeUpload(init.mediaId);
   },
+
+  listContractTemplates: () => request<ContractTemplate[]>("/contract-templates"),
+  createContractTemplate: (dto: CreateContractTemplateDto) =>
+    request<ContractTemplate>("/contract-templates", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+  deleteContractTemplate: (id: string) =>
+    request<{ id: string }>(`/contract-templates/${id}`, { method: "DELETE" }),
+
+  createContract: (bookingId: string, dto: CreateContractDto) =>
+    request<Contract>(`/bookings/${bookingId}/contract`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+  getContractForBooking: (bookingId: string) =>
+    request<Contract | null>(`/bookings/${bookingId}/contract`),
+  getPublicContract: (id: string) => request<PublicContract>(`/contracts/${id}`),
+  signContract: (id: string, dto: SignContractDto) =>
+    request<Contract>(`/contracts/${id}/sign`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+  getContractDownloadUrl: (id: string) =>
+    request<{ url: string }>(`/contracts/${id}/download`),
 };
