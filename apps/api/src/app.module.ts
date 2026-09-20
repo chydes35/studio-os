@@ -10,6 +10,7 @@ import { DbModule } from './db/db.module.js';
 import { GalleryModule } from './gallery/gallery.module.js';
 import { MediaModule } from './media/media.module.js';
 import { OwnerModule } from './owner/owner.module.js';
+import { PaymentsModule } from './payments/payments.module.js';
 import { StorageModule } from './storage/storage.module.js';
 
 @Module({
@@ -24,6 +25,7 @@ import { StorageModule } from './storage/storage.module.js';
     GalleryModule,
     MediaModule,
     ContractsModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

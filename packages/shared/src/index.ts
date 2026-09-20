@@ -152,3 +152,32 @@ export const signContractSchema = z.object({
   signatureImage: z.string().startsWith("data:image/png"),
 });
 export type SignContractDto = z.infer<typeof signContractSchema>;
+
+// ---------- Financials (Phase 5) ----------
+
+export const invoiceLineItemInputSchema = z.object({
+  description: z.string().min(1),
+  quantity: z.number().int().positive().default(1),
+  unitAmountCents: z.number().int().positive(),
+});
+export type InvoiceLineItemInput = z.infer<typeof invoiceLineItemInputSchema>;
+
+export const createInvoiceSchema = z.object({
+  dueAt: z.coerce.date().optional(),
+  lineItems: z.array(invoiceLineItemInputSchema).min(1),
+});
+export type CreateInvoiceDto = z.infer<typeof createInvoiceSchema>;
+
+export const markInvoicePaidSchema = z.object({
+  amountCents: z.number().int().positive(),
+});
+export type MarkInvoicePaidDto = z.infer<typeof markInvoicePaidSchema>;
+
+export const createExpenseSchema = z.object({
+  description: z.string().min(1),
+  category: z.string().optional(),
+  amountCents: z.number().int().positive(),
+  incurredAt: z.coerce.date().optional(),
+  bookingId: z.string().optional(),
+});
+export type CreateExpenseDto = z.infer<typeof createExpenseSchema>;

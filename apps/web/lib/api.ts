@@ -7,6 +7,8 @@ import type {
   CreateClientDto,
   CreateContractDto,
   CreateContractTemplateDto,
+  CreateExpenseDto,
+  CreateInvoiceDto,
   PublicBookingRequestDto,
   SignContractDto,
   UploadInitResponse,
@@ -99,6 +101,55 @@ export type PublicContract = {
   renderedMarkdown: string;
   signedAt: string | null;
   signerName: string | null;
+};
+
+export type InvoiceLineItem = {
+  id: string;
+  description: string;
+  quantity: number;
+  unitAmountCents: number;
+};
+
+export type Payment = {
+  id: string;
+  amountCents: number;
+  method: string;
+  paidAt: string;
+};
+
+export type InvoiceStatus = "DRAFT" | "SENT" | "PARTIALLY_PAID" | "PAID" | "OVERDUE" | "VOID";
+
+export type Invoice = {
+  id: string;
+  bookingId: string;
+  status: InvoiceStatus;
+  dueAt: string | null;
+  lineItems: InvoiceLineItem[];
+  payments: Payment[];
+  totalCents: number;
+  paidCents: number;
+  balanceCents: number;
+  createdAt: string;
+};
+
+export type PublicInvoice = {
+  id: string;
+  status: InvoiceStatus;
+  dueAt: string | null;
+  lineItems: InvoiceLineItem[];
+  stripeConfigured: boolean;
+  totalCents: number;
+  paidCents: number;
+  balanceCents: number;
+};
+
+export type Expense = {
+  id: string;
+  bookingId: string | null;
+  description: string;
+  category: string | null;
+  amountCents: number;
+  incurredAt: string;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -242,4 +293,28 @@ export const api = {
     }),
   getContractDownloadUrl: (id: string) =>
     request<{ url: string }>(`/contracts/${id}/download`),
+
+  createInvoice: (bookingId: string, dto: CreateInvoiceDto) =>
+    request<Invoice>(`/bookings/${bookingId}/invoices`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+  listInvoicesForBooking: (bookingId: string) =>
+    request<Invoice[]>(`/bookings/${bookingId}/invoices`),
+  markInvoiceSent: (id: string) =>
+    request<Invoice>(`/invoices/${id}/send`, { method: "PATCH" }),
+  markInvoicePaid: (id: string, amountCents: number) =>
+    request<Invoice>(`/invoices/${id}/mark-paid`, {
+      method: "POST",
+      body: JSON.stringify({ amountCents }),
+    }),
+  getPublicInvoice: (id: string) => request<PublicInvoice>(`/invoices/${id}`),
+  createInvoiceCheckoutSession: (id: string) =>
+    request<{ url: string }>(`/invoices/${id}/checkout`, { method: "POST" }),
+
+  listExpenses: () => request<Expense[]>("/expenses"),
+  createExpense: (dto: CreateExpenseDto) =>
+    request<Expense>("/expenses", { method: "POST", body: JSON.stringify(dto) }),
+  deleteExpense: (id: string) =>
+    request<{ id: string }>(`/expenses/${id}`, { method: "DELETE" }),
 };

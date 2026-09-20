@@ -1,0 +1,159 @@
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Prisma, PrismaClient } from '@repo/db';
+import type { CreateInvoiceDto } from '@repo/shared';
+import { PRISMA } from '../db/db.module.js';
+import { OwnerContextService } from '../owner/owner-context.service.js';
+import { StripeService } from './stripe.service.js';
+
+const INVOICE_WITH_DETAILS = {
+  include: { lineItems: true, payments: true },
+} satisfies Prisma.InvoiceDefaultArgs;
+
+type InvoiceWithDetails = Prisma.InvoiceGetPayload<typeof INVOICE_WITH_DETAILS>;
+
+function computeTotals(invoice: InvoiceWithDetails) {
+  const totalCents = invoice.lineItems.reduce(
+    (sum, item) => sum + item.quantity * item.unitAmountCents,
+    0,
+  );
+  const paidCents = invoice.payments.reduce((sum, p) => sum + p.amountCents, 0);
+  return { totalCents, paidCents, balanceCents: totalCents - paidCents };
+}
+
+@Injectable()
+export class InvoicesService {
+  constructor(
+    @Inject(PRISMA) private readonly prisma: PrismaClient,
+    private readonly ownerContext: OwnerContextService,
+    private readonly stripe: StripeService,
+    private readonly config: ConfigService,
+  ) {}
+
+  async createForBooking(bookingId: string, dto: CreateInvoiceDto) {
+    const ownerId = await this.ownerContext.getOwnerId();
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, ownerId },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const invoice = await this.prisma.invoice.create({
+      data: {
+        bookingId,
+        dueAt: dto.dueAt,
+        lineItems: { create: dto.lineItems },
+      },
+      ...INVOICE_WITH_DETAILS,
+    });
+    return { ...invoice, ...computeTotals(invoice) };
+  }
+
+  async listForBookingOwnerView(bookingId: string) {
+    const ownerId = await this.ownerContext.getOwnerId();
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, ownerId },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: { bookingId },
+      orderBy: { createdAt: 'desc' },
+      ...INVOICE_WITH_DETAILS,
+    });
+    return invoices.map((inv) => ({ ...inv, ...computeTotals(inv) }));
+  }
+
+  async markSent(id: string) {
+    const invoice = await this.findOwned(id);
+    if (invoice.status !== 'DRAFT') {
+      throw new BadRequestException('Only a draft invoice can be sent');
+    }
+    const updated = await this.prisma.invoice.update({
+      where: { id },
+      data: { status: 'SENT' },
+      ...INVOICE_WITH_DETAILS,
+    });
+    return { ...updated, ...computeTotals(updated) };
+  }
+
+  async markPaid(id: string, amountCents: number) {
+    const invoice = await this.findOwned(id);
+    await this.prisma.payment.create({
+      data: { invoiceId: id, amountCents, method: 'manual' },
+    });
+    return this.recomputeStatus(id);
+  }
+
+  async getPublicView(id: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      ...INVOICE_WITH_DETAILS,
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return {
+      id: invoice.id,
+      status: invoice.status,
+      dueAt: invoice.dueAt,
+      lineItems: invoice.lineItems,
+      stripeConfigured: this.stripe.isConfigured(),
+      ...computeTotals(invoice),
+    };
+  }
+
+  async createCheckoutSession(id: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      ...INVOICE_WITH_DETAILS,
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    const { balanceCents } = computeTotals(invoice);
+    if (balanceCents <= 0) {
+      throw new BadRequestException('This invoice is already paid in full');
+    }
+
+    const webAppUrl = this.config.get<string>('WEB_APP_URL') ?? 'http://localhost:3000';
+    return this.stripe.createCheckoutSession({
+      invoiceId: invoice.id,
+      amountCents: balanceCents,
+      description: `Invoice ${invoice.id}`,
+      successUrl: `${webAppUrl}/invoices/${invoice.id}?paid=1`,
+      cancelUrl: `${webAppUrl}/invoices/${invoice.id}`,
+    });
+  }
+
+  async handleCheckoutCompleted(invoiceId: string, amountCents: number, stripeChargeId: string) {
+    await this.prisma.payment.create({
+      data: { invoiceId, amountCents, method: 'stripe_card', stripeChargeId },
+    });
+    await this.recomputeStatus(invoiceId);
+  }
+
+  private async recomputeStatus(id: string) {
+    const invoice = await this.prisma.invoice.findUniqueOrThrow({
+      where: { id },
+      ...INVOICE_WITH_DETAILS,
+    });
+    const totals = computeTotals(invoice);
+    const status = totals.balanceCents <= 0 ? 'PAID' : 'PARTIALLY_PAID';
+    const updated = await this.prisma.invoice.update({
+      where: { id },
+      data: { status },
+      ...INVOICE_WITH_DETAILS,
+    });
+    return { ...updated, ...computeTotals(updated) };
+  }
+
+  private async findOwned(id: string) {
+    const ownerId = await this.ownerContext.getOwnerId();
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id, booking: { ownerId } },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return invoice;
+  }
+}

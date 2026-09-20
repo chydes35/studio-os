@@ -58,6 +58,12 @@ export default function RootLayout({
                 Contract templates
               </Link>
               <Link
+                href="/expenses"
+                className="text-sm text-slate-600 hover:text-slate-900"
+              >
+                Expenses
+              </Link>
+              <Link
                 href="/book"
                 className="ml-auto text-sm text-slate-400 hover:text-slate-600"
               >

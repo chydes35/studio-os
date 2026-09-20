@@ -61,6 +61,7 @@ model User {
   locations        Location[]
   contractTemplates ContractTemplate[]
   questionnaireTemplates QuestionnaireTemplate[]
+  expenses         Expense[]
 }
 
 model Client {
@@ -101,6 +102,7 @@ model Booking {
   invoices              Invoice[]
   gallery               Gallery?
   questionnaireResponses QuestionnaireResponse[]
+  expenses              Expense[]
 
   @@index([ownerId])
   @@index([clientId])
@@ -200,6 +202,22 @@ model Payment {
   method          String // "stripe_card" | "stripe_ach" | "manual"
   stripeChargeId  String?
   paidAt          DateTime @default(now())
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  bookingId   String?
+  booking     Booking? @relation(fields: [bookingId], references: [id])
+  description String
+  category    String?
+  amountCents Int
+  incurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([bookingId])
 }
 
 // ---------- Media / Galleries ----------
