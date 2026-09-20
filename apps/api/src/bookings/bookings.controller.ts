@@ -16,6 +16,11 @@ export class BookingsController {
     return this.bookingsService.list();
   }
 
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.bookingsService.findOne(id);
+  }
+
   @Post()
   create(
     @Body(new ZodValidationPipe(createBookingSchema))

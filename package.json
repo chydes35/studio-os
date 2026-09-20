@@ -31,6 +31,8 @@
     "@prisma/engines@6.19.3": true,
     "prisma@6.19.3": true,
     "fsevents@2.3.3": true,
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "sharp@0.33.5": true,
+    "sharp@0.35.4": true
   }
 }

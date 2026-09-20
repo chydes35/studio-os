@@ -35,7 +35,7 @@ export const updateBookingStageSchema = z.object({
 export type UpdateBookingStageDto = z.infer<typeof updateBookingStageSchema>;
 
 export const uploadInitSchema = z.object({
-  bookingId: z.string().min(1),
+  galleryId: z.string().min(1),
   fileName: z.string().min(1),
   fileSizeBytes: z.number().positive(),
   mimeType: z.string().min(1),
@@ -49,11 +49,9 @@ export const uploadInitResponseSchema = z.discriminatedUnion("kind", [
     uploadUrl: z.string().url(),
   }),
   z.object({
-    kind: z.literal("r2_multipart"),
+    kind: z.literal("r2_put"),
     mediaId: z.string(),
-    uploadId: z.string(),
-    key: z.string(),
-    partUrls: z.array(z.object({ partNumber: z.number(), url: z.string().url() })),
+    uploadUrl: z.string().url(),
   }),
 ]);
 export type UploadInitResponse = z.infer<typeof uploadInitResponseSchema>;
@@ -109,3 +107,28 @@ export const publicBookingRequestSchema = z.object({
 export type PublicBookingRequestDto = z.infer<
   typeof publicBookingRequestSchema
 >;
+
+// ---------- Media / Galleries (Phase 3) ----------
+
+export const createGallerySchema = z.object({
+  password: z.string().min(6),
+});
+export type CreateGalleryDto = z.infer<typeof createGallerySchema>;
+
+export const unlockGallerySchema = z.object({
+  password: z.string().min(1),
+});
+export type UnlockGalleryDto = z.infer<typeof unlockGallerySchema>;
+
+export const addMediaCommentSchema = z.object({
+  password: z.string().min(1),
+  authorName: z.string().min(1),
+  body: z.string().min(1),
+  timestampSeconds: z.number().nonnegative().optional(),
+});
+export type AddMediaCommentDto = z.infer<typeof addMediaCommentSchema>;
+
+export const toggleFavoriteSchema = z.object({
+  password: z.string().min(1),
+});
+export type ToggleFavoriteDto = z.infer<typeof toggleFavoriteSchema>;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
+import Link from "next/link";
 import type { Booking } from "../../lib/api";
 
 export function BookingCard({ booking }: { booking: Booking }) {
@@ -31,6 +32,13 @@ export function BookingCard({ booking }: { booking: Booking }) {
           {new Date(booking.scheduledAt).toLocaleDateString()}
         </p>
       )}
+      <Link
+        href={`/bookings/${booking.id}`}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="mt-2 inline-block text-xs text-slate-500 underline hover:text-slate-800"
+      >
+        Manage gallery →
+      </Link>
     </div>
   );
 }

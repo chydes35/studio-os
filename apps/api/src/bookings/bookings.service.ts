@@ -31,6 +31,16 @@ export class BookingsService {
     });
   }
 
+  async findOne(id: string) {
+    const ownerId = await this.ownerContext.getOwnerId();
+    const booking = await this.prisma.booking.findFirst({
+      where: { id, ownerId },
+      include: { client: true },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+    return booking;
+  }
+
   async create(dto: CreateBookingDto) {
     const ownerId = await this.ownerContext.getOwnerId();
     return this.prisma.booking.create({

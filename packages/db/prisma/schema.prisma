@@ -221,7 +221,9 @@ model Media {
   gallery         Gallery         @relation(fields: [galleryId], references: [id])
   type            MediaType
   storageProvider StorageProvider
-  r2Key           String?
+  fileName        String?
+  r2Key           String? // original, private — never served directly until purchased
+  previewR2Key    String? // watermarked derivative, publicly servable
   muxAssetId      String?
   muxPlaybackId   String?
   isOriginal      Boolean         @default(false) // true = purchased/unwatermarked
