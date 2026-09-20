@@ -64,6 +64,18 @@ export default function RootLayout({
                 Expenses
               </Link>
               <Link
+                href="/questionnaires/templates"
+                className="text-sm text-slate-600 hover:text-slate-900"
+              >
+                Questionnaires
+              </Link>
+              <Link
+                href="/notifications"
+                className="text-sm text-slate-600 hover:text-slate-900"
+              >
+                Notifications
+              </Link>
+              <Link
                 href="/book"
                 className="ml-auto text-sm text-slate-400 hover:text-slate-600"
               >

@@ -181,3 +181,32 @@ export const createExpenseSchema = z.object({
   bookingId: z.string().optional(),
 });
 export type CreateExpenseDto = z.infer<typeof createExpenseSchema>;
+
+// ---------- Automated workflows & questionnaires (Phase 6) ----------
+
+export const questionnaireFieldTypeSchema = z.enum(["text", "textarea", "select", "checkbox"]);
+export type QuestionnaireFieldType = z.infer<typeof questionnaireFieldTypeSchema>;
+
+export const questionnaireFieldSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  type: questionnaireFieldTypeSchema,
+  options: z.array(z.string()).optional(),
+});
+export type QuestionnaireField = z.infer<typeof questionnaireFieldSchema>;
+
+export const createQuestionnaireTemplateSchema = z.object({
+  name: z.string().min(1),
+  fields: z.array(questionnaireFieldSchema).min(1),
+});
+export type CreateQuestionnaireTemplateDto = z.infer<typeof createQuestionnaireTemplateSchema>;
+
+export const assignQuestionnaireSchema = z.object({
+  templateId: z.string().min(1),
+});
+export type AssignQuestionnaireDto = z.infer<typeof assignQuestionnaireSchema>;
+
+export const submitQuestionnaireSchema = z.object({
+  answers: z.record(z.string(), z.union([z.string(), z.boolean()])),
+});
+export type SubmitQuestionnaireDto = z.infer<typeof submitQuestionnaireSchema>;

@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { api, type Booking, type Gallery } from "../../../lib/api";
 import { BookingContractSection } from "./BookingContractSection";
 import { BookingInvoicesSection } from "./BookingInvoicesSection";
+import { BookingQuestionnaireSection } from "./BookingQuestionnaireSection";
 
 export default function BookingDetailPage({
   params,
@@ -89,6 +90,8 @@ export default function BookingDetailPage({
       <BookingContractSection bookingId={id} booking={booking} />
 
       <BookingInvoicesSection bookingId={id} />
+
+      <BookingQuestionnaireSection bookingId={id} />
 
       {!gallery ? (
         <form

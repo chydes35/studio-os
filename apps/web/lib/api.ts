@@ -9,7 +9,9 @@ import type {
   CreateContractTemplateDto,
   CreateExpenseDto,
   CreateInvoiceDto,
+  CreateQuestionnaireTemplateDto,
   PublicBookingRequestDto,
+  QuestionnaireField,
   SignContractDto,
   UploadInitResponse,
 } from "@repo/shared";
@@ -150,6 +152,42 @@ export type Expense = {
   category: string | null;
   amountCents: number;
   incurredAt: string;
+};
+
+export type QuestionnaireTemplate = {
+  id: string;
+  name: string;
+  schema: QuestionnaireField[];
+  createdAt: string;
+};
+
+export type QuestionnaireResponse = {
+  id: string;
+  bookingId: string;
+  templateId: string;
+  template: QuestionnaireTemplate;
+  answers: Record<string, string | boolean>;
+  submittedAt: string | null;
+  createdAt: string;
+};
+
+export type PublicQuestionnaire = {
+  id: string;
+  templateName: string;
+  fields: QuestionnaireField[];
+  answers: Record<string, string | boolean>;
+  submittedAt: string | null;
+};
+
+export type EmailLog = {
+  id: string;
+  bookingId: string | null;
+  booking?: { client: Client } | null;
+  type: string;
+  recipientEmail: string;
+  subject: string;
+  status: string;
+  createdAt: string;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -317,4 +355,36 @@ export const api = {
     request<Expense>("/expenses", { method: "POST", body: JSON.stringify(dto) }),
   deleteExpense: (id: string) =>
     request<{ id: string }>(`/expenses/${id}`, { method: "DELETE" }),
+
+  listQuestionnaireTemplates: () =>
+    request<QuestionnaireTemplate[]>("/questionnaire-templates"),
+  createQuestionnaireTemplate: (dto: CreateQuestionnaireTemplateDto) =>
+    request<QuestionnaireTemplate>("/questionnaire-templates", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+  deleteQuestionnaireTemplate: (id: string) =>
+    request<{ id: string }>(`/questionnaire-templates/${id}`, { method: "DELETE" }),
+
+  assignQuestionnaire: (bookingId: string, templateId: string) =>
+    request<QuestionnaireResponse>(`/bookings/${bookingId}/questionnaires`, {
+      method: "POST",
+      body: JSON.stringify({ templateId }),
+    }),
+  listQuestionnairesForBooking: (bookingId: string) =>
+    request<QuestionnaireResponse[]>(`/bookings/${bookingId}/questionnaires`),
+  getPublicQuestionnaire: (id: string) =>
+    request<PublicQuestionnaire>(`/questionnaire-responses/${id}`),
+  submitQuestionnaire: (id: string, answers: Record<string, string | boolean>) =>
+    request<QuestionnaireResponse>(`/questionnaire-responses/${id}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    }),
+
+  listEmailLogs: () => request<EmailLog[]>("/notifications/email-log"),
+  runNotificationsNow: () =>
+    request<{ remindersSent: number; overdueProcessed: number }>(
+      "/notifications/run-now",
+      { method: "POST" },
+    ),
 };
