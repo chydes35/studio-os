@@ -1,0 +1,316 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  OWNER
+  STAFF
+}
+
+enum BookingStage {
+  INQUIRY
+  BOOKED
+  SHOT
+  EDITING
+  DELIVERED
+  CLOSED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum MediaType {
+  PHOTO
+  VIDEO
+  RAW
+}
+
+enum StorageProvider {
+  R2
+  MUX
+}
+
+// ---------- Core ----------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         Role     @default(OWNER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clients          Client[]
+  bookings         Booking[]
+  availabilityRules AvailabilityRule[]
+  calendarBlocks   CalendarBlock[]
+  equipment        Equipment[]
+  locations        Location[]
+  contractTemplates ContractTemplate[]
+  questionnaireTemplates QuestionnaireTemplate[]
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+  name      String
+  email     String
+  phone     String?
+  source    String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings Booking[]
+
+  @@index([ownerId])
+}
+
+model Booking {
+  id           String       @id @default(cuid())
+  ownerId      String
+  owner        User         @relation(fields: [ownerId], references: [id])
+  clientId     String
+  client       Client       @relation(fields: [clientId], references: [id])
+  locationId   String?
+  location     Location?    @relation(fields: [locationId], references: [id])
+  shootType    String
+  stage        BookingStage @default(INQUIRY)
+  scheduledAt  DateTime?
+  durationMins Int?
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  contract              Contract?
+  invoices              Invoice[]
+  gallery               Gallery?
+  questionnaireResponses QuestionnaireResponse[]
+
+  @@index([ownerId])
+  @@index([clientId])
+  @@index([stage])
+}
+
+// ---------- Scheduling ----------
+
+model AvailabilityRule {
+  id            String   @id @default(cuid())
+  ownerId       String
+  owner         User     @relation(fields: [ownerId], references: [id])
+  dayOfWeek     Int // 0-6, Sunday-Saturday
+  startTime     String // "09:00"
+  endTime       String // "17:00"
+  bufferMinutes Int      @default(0)
+
+  @@index([ownerId])
+}
+
+model CalendarBlock {
+  id           String   @id @default(cuid())
+  ownerId      String
+  owner        User     @relation(fields: [ownerId], references: [id])
+  source       String // "google" | "apple" | "manual"
+  externalId   String?
+  startsAt     DateTime
+  endsAt       DateTime
+  title        String?
+
+  @@index([ownerId])
+}
+
+// ---------- Contracts ----------
+
+model ContractTemplate {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+  name      String
+  bodyMarkdown String // supports {{client_name}}, {{shoot_date}}, {{price}} etc.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contracts Contract[]
+}
+
+model Contract {
+  id              String    @id @default(cuid())
+  bookingId       String    @unique
+  booking         Booking   @relation(fields: [bookingId], references: [id])
+  templateId      String
+  template        ContractTemplate @relation(fields: [templateId], references: [id])
+  renderedMarkdown String
+  signedAt        DateTime?
+  signerName      String?
+  signatureImage  String? // data URL or R2 key of the captured signature
+  signerIp        String?
+  signerUserAgent String?
+  documentHash    String? // sha256 of the finalized PDF, for tamper evidence
+  pdfR2Key        String?
+  createdAt       DateTime  @default(now())
+}
+
+// ---------- Financials ----------
+
+model Invoice {
+  id           String        @id @default(cuid())
+  bookingId    String
+  booking      Booking       @relation(fields: [bookingId], references: [id])
+  status       InvoiceStatus @default(DRAFT)
+  dueAt        DateTime?
+  stripePaymentIntentId String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  lineItems InvoiceLineItem[]
+  payments  Payment[]
+
+  @@index([bookingId])
+}
+
+model InvoiceLineItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id])
+  description String
+  quantity    Int     @default(1)
+  unitAmountCents Int
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id])
+  amountCents     Int
+  method          String // "stripe_card" | "stripe_ach" | "manual"
+  stripeChargeId  String?
+  paidAt          DateTime @default(now())
+}
+
+// ---------- Media / Galleries ----------
+
+model Gallery {
+  id           String   @id @default(cuid())
+  bookingId    String   @unique
+  booking      Booking  @relation(fields: [bookingId], references: [id])
+  passwordHash String
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  media Media[]
+}
+
+model Media {
+  id              String          @id @default(cuid())
+  galleryId       String
+  gallery         Gallery         @relation(fields: [galleryId], references: [id])
+  type            MediaType
+  storageProvider StorageProvider
+  r2Key           String?
+  muxAssetId      String?
+  muxPlaybackId   String?
+  isOriginal      Boolean         @default(false) // true = purchased/unwatermarked
+  isFavorited     Boolean         @default(false)
+  processingStatus String         @default("pending") // pending | ready | failed
+  createdAt       DateTime        @default(now())
+
+  comments Comment[]
+
+  @@index([galleryId])
+}
+
+model Comment {
+  id              String   @id @default(cuid())
+  mediaId         String
+  media           Media    @relation(fields: [mediaId], references: [id])
+  authorName      String
+  body            String
+  timestampSeconds Float? // populated for video comments
+  createdAt       DateTime @default(now())
+
+  @@index([mediaId])
+}
+
+// ---------- Questionnaires ----------
+
+model QuestionnaireTemplate {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+  name      String
+  schema    Json // array of {id, label, type, options?}
+  createdAt DateTime @default(now())
+
+  responses QuestionnaireResponse[]
+}
+
+model QuestionnaireResponse {
+  id           String                 @id @default(cuid())
+  bookingId    String
+  booking      Booking                @relation(fields: [bookingId], references: [id])
+  templateId   String
+  template     QuestionnaireTemplate  @relation(fields: [templateId], references: [id])
+  answers      Json
+  submittedAt  DateTime?
+  createdAt    DateTime               @default(now())
+}
+
+// ---------- Equipment ----------
+
+model Equipment {
+  id              String    @id @default(cuid())
+  ownerId         String
+  owner           User      @relation(fields: [ownerId], references: [id])
+  name            String
+  serialNumber    String?
+  purchaseDate    DateTime?
+  lastServicedAt  DateTime?
+  nextServiceDue  DateTime?
+  notes           String?
+
+  @@index([ownerId])
+}
+
+// ---------- Locations ----------
+
+model Location {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+  name      String
+  latitude  Float
+  longitude Float
+  bestTimeOfDay String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  photos   LocationPhoto[]
+  bookings Booking[]
+
+  @@index([ownerId])
+}
+
+model LocationPhoto {
+  id         String   @id @default(cuid())
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+  r2Key      String
+  caption    String?
+  createdAt  DateTime @default(now())
+
+  @@index([locationId])
+}

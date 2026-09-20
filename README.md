@@ -1,159 +1,45 @@
-# Turborepo starter
+# Studio OS
 
-This Turborepo starter is maintained by the Turborepo core team.
+Business management and client portal platform for photographers and videographers: lead capture, scheduling, contracts, invoicing, secure media proofing/delivery.
 
-## Using this example
+## Structure
 
-Run the following command:
+- `apps/web` — Next.js (owner dashboard + public booking/gallery pages, client)
+- `apps/api` — NestJS (REST API; the single backend the web app and, later, a mobile app both talk to)
+- `packages/db` — Prisma schema + client, shared by `apps/api`
+- `packages/shared` — Zod schemas / DTOs shared between `apps/web` and `apps/api`
+- `packages/ui` — shared React components
+- `packages/eslint-config`, `packages/typescript-config` — shared tooling config
 
-```sh
-npx create-turbo@latest
+## Setup
+
+```bash
+# Local Postgres (docker compose isn't installed on this machine — plain docker run instead)
+docker run -d --name studio_os_postgres \
+  -e POSTGRES_USER=studio_os -e POSTGRES_PASSWORD=studio_os -e POSTGRES_DB=studio_os \
+  -p 5433:5432 -v studio_os_pg_data:/var/lib/postgresql/data postgres:16-alpine
+
+cp .env.example .env   # already pre-filled with the local DATABASE_URL above; add R2/Mux/Stripe/Resend keys when ready
+npm install
+npm run --workspace=@repo/db generate
+npm run --workspace=@repo/db migrate:dev
+npm run --workspace=@repo/db seed   # creates a dev owner + sample clients/bookings
 ```
 
-## What's inside?
+`.env` is symlinked into `packages/db/.env`, `apps/api/.env`, and `apps/web/.env.local` so every workspace package/app picks up the same values regardless of its own cwd.
 
-This Turborepo includes the following packages/apps:
+## Develop
 
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `@next/eslint-plugin-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```bash
+npm run dev   # runs web (port 3000) and api (port 3001) together via turbo
 ```
 
-Without global `turbo`, use your package manager:
+Visit `/clients` to add clients and `/bookings` for the Kanban pipeline (drag cards between stages).
 
-```sh
-cd my-turborepo
-npx turbo build
-npm exec turbo build
-npm exec turbo build
-```
+## Auth
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Phase 1 has no auth yet — every owned record resolves to a single seeded "OWNER" user via `OwnerContextService` (`apps/api/src/owner/owner-context.service.ts`). This gets replaced with real request-scoped auth in a later phase; don't build multi-tenant assumptions on top of it yet.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+## Why a separate API instead of Next.js API routes
 
-```sh
-turbo build --filter=docs
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo build --filter=docs
-npm exec turbo build --filter=docs
-npm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-npm exec turbo dev
-npm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-npm exec turbo dev --filter=web
-npm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-npm exec turbo login
-npm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-npm exec turbo link
-npm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+`apps/api` is a standalone NestJS service with its own deploy and a documented contract. When the React Native/Expo mobile app is built in Phase 2, it becomes just another client of the same API — no backend rework, same `packages/shared` DTOs for request/response validation.
