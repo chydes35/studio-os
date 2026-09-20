@@ -1,7 +1,10 @@
 import type {
   BookingStage,
+  CreateAvailabilityRuleDto,
   CreateBookingDto,
+  CreateCalendarBlockDto,
   CreateClientDto,
+  PublicBookingRequestDto,
 } from "@repo/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -23,6 +26,22 @@ export type Booking = {
   stage: BookingStage;
   scheduledAt: string | null;
   createdAt: string;
+};
+
+export type AvailabilityRule = {
+  id: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  bufferMinutes: number;
+};
+
+export type CalendarBlock = {
+  id: string;
+  title: string | null;
+  startsAt: string;
+  endsAt: string;
+  source: string;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -54,4 +73,32 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ stage }),
     }),
+  createPublicBookingRequest: (dto: PublicBookingRequestDto) =>
+    request<Booking>("/bookings/public-request", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  listAvailabilityRules: () => request<AvailabilityRule[]>("/availability/rules"),
+  createAvailabilityRule: (dto: CreateAvailabilityRuleDto) =>
+    request<AvailabilityRule>("/availability/rules", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+  deleteAvailabilityRule: (id: string) =>
+    request<{ id: string }>(`/availability/rules/${id}`, { method: "DELETE" }),
+
+  listCalendarBlocks: () => request<CalendarBlock[]>("/availability/blocks"),
+  createCalendarBlock: (dto: CreateCalendarBlockDto) =>
+    request<CalendarBlock>("/availability/blocks", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+  deleteCalendarBlock: (id: string) =>
+    request<{ id: string }>(`/availability/blocks/${id}`, { method: "DELETE" }),
+
+  getAvailableSlots: (date: string, durationMins: number) =>
+    request<string[]>(
+      `/availability/slots?date=${date}&durationMins=${durationMins}`,
+    ),
 };

@@ -34,7 +34,14 @@ npm run --workspace=@repo/db seed   # creates a dev owner + sample clients/booki
 npm run dev   # runs web (port 3000) and api (port 3001) together via turbo
 ```
 
-Visit `/clients` to add clients and `/bookings` for the Kanban pipeline (drag cards between stages).
+Visit `/clients` to add clients, `/bookings` for the Kanban pipeline (drag cards between stages), `/availability` to set working hours and block off time, and `/book` for the client-facing booking portal (no auth — this is what a client sees).
+
+## Scheduling (Phase 2)
+
+- Owner sets recurring **AvailabilityRule**s (day of week + start/end time + buffer minutes) and one-off **CalendarBlock**s (manual time off) at `/availability`.
+- `GET /availability/slots?date=YYYY-MM-DD&durationMins=60` computes open slots for that date from the matching day's rules, minus existing bookings and calendar blocks (each rule's buffer is applied around candidate slots, not around the busy intervals themselves).
+- The public booking portal (`/book`) lets a client pick a shoot type + slot and submit a request; `POST /bookings/public-request` re-validates the slot is still open server-side (re-running the same slot computation) before creating the client (upserted by `(ownerId, email)`) and booking, to close the race between two clients requesting the same slot.
+- **Google/Apple Calendar sync is not implemented** — it needs a Google Cloud OAuth client (and Apple's CalDAV equivalent), and no such credentials exist yet. `CalendarBlock.source` already has a `"google"` variant reserved in the schema for when that's wired up; until then, all blocks are `"manual"`.
 
 ## Auth
 

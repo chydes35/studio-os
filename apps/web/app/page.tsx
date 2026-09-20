@@ -21,6 +21,24 @@ export default function Home() {
           Track shoots through your pipeline, from inquiry to delivered.
         </p>
       </Link>
+      <Link
+        href="/availability"
+        className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-300 hover:shadow"
+      >
+        <h2 className="text-lg font-semibold">Availability</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Set your working hours and block off personal time.
+        </p>
+      </Link>
+      <Link
+        href="/book"
+        className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-300 hover:shadow"
+      >
+        <h2 className="text-lg font-semibold">Public booking page</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          What clients see when they request a shoot.
+        </p>
+      </Link>
     </div>
   );
 }

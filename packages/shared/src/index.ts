@@ -57,3 +57,55 @@ export const uploadInitResponseSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 export type UploadInitResponse = z.infer<typeof uploadInitResponseSchema>;
+
+// ---------- Scheduling (Phase 2) ----------
+
+const timeOfDaySchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM (24h)");
+
+export const createAvailabilityRuleSchema = z
+  .object({
+    dayOfWeek: z.number().int().min(0).max(6),
+    startTime: timeOfDaySchema,
+    endTime: timeOfDaySchema,
+    bufferMinutes: z.number().int().min(0).default(0),
+  })
+  .refine((v) => v.startTime < v.endTime, {
+    message: "startTime must be before endTime",
+    path: ["endTime"],
+  });
+export type CreateAvailabilityRuleDto = z.infer<
+  typeof createAvailabilityRuleSchema
+>;
+
+export const createCalendarBlockSchema = z
+  .object({
+    title: z.string().optional(),
+    startsAt: z.coerce.date(),
+    endsAt: z.coerce.date(),
+  })
+  .refine((v) => v.startsAt < v.endsAt, {
+    message: "startsAt must be before endsAt",
+    path: ["endsAt"],
+  });
+export type CreateCalendarBlockDto = z.infer<typeof createCalendarBlockSchema>;
+
+export const availableSlotsQuerySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
+  durationMins: z.coerce.number().int().positive().default(60),
+});
+export type AvailableSlotsQuery = z.infer<typeof availableSlotsQuerySchema>;
+
+export const publicBookingRequestSchema = z.object({
+  clientName: z.string().min(1),
+  clientEmail: z.string().email(),
+  clientPhone: z.string().optional(),
+  shootType: z.string().min(1),
+  scheduledAt: z.coerce.date(),
+  durationMins: z.number().int().positive(),
+  notes: z.string().optional(),
+});
+export type PublicBookingRequestDto = z.infer<
+  typeof publicBookingRequestSchema
+>;

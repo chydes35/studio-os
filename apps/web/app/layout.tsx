@@ -45,6 +45,18 @@ export default function RootLayout({
               >
                 Bookings
               </Link>
+              <Link
+                href="/availability"
+                className="text-sm text-slate-600 hover:text-slate-900"
+              >
+                Availability
+              </Link>
+              <Link
+                href="/book"
+                className="ml-auto text-sm text-slate-400 hover:text-slate-600"
+              >
+                Public booking page ↗
+              </Link>
             </nav>
           </header>
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
