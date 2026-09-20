@@ -34,10 +34,14 @@ export const updateBookingStageSchema = z.object({
 });
 export type UpdateBookingStageDto = z.infer<typeof updateBookingStageSchema>;
 
+// Blanket sanity ceiling shared by photo + video; the API enforces a
+// tighter, type-specific limit on top of this (see MediaService).
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024; // 5GB
+
 export const uploadInitSchema = z.object({
   galleryId: z.string().min(1),
   fileName: z.string().min(1),
-  fileSizeBytes: z.number().positive(),
+  fileSizeBytes: z.number().positive().max(MAX_UPLOAD_BYTES),
   mimeType: z.string().min(1),
 });
 export type UploadInitDto = z.infer<typeof uploadInitSchema>;

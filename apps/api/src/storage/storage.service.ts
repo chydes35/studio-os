@@ -53,11 +53,25 @@ export class StorageService {
    * CORS, which this local MinIO build's PutBucketCors API doesn't support
    * (real Cloudflare R2 does, so multipart could be reinstated for very large
    * raw files later). Video already avoids this entirely via Mux.
+   *
+   * `contentLength`, when passed, is signed into the URL so the storage
+   * backend rejects any PUT whose actual `Content-Length` doesn't match it —
+   * this is what enforces the declared upload size, since nothing else stops
+   * a client from streaming more bytes than it claimed at init time.
    */
-  async createPresignedPutUrl(key: string, contentType: string): Promise<string> {
+  async createPresignedPutUrl(
+    key: string,
+    contentType: string,
+    contentLength?: number,
+  ): Promise<string> {
     return getSignedUrl(
       this.client,
-      new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }),
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ContentType: contentType,
+        ContentLength: contentLength,
+      }),
       { expiresIn: PRESIGN_EXPIRY_SECONDS },
     );
   }

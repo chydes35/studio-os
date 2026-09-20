@@ -3,9 +3,15 @@ import type { PrismaClient } from '@repo/db';
 import type { AddMediaCommentDto, UploadInitDto, UploadInitResponse } from '@repo/shared';
 import { PRISMA } from '../db/db.module.js';
 import { GalleryService } from '../gallery/gallery.service.js';
+import { OwnerContextService } from '../owner/owner-context.service.js';
 import { MuxService } from '../storage/mux.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { WatermarkService } from '../storage/watermark.service.js';
+
+// Photo uploads go straight to R2 with no transcoding, so they get a tighter
+// cap than video (which Mux handles and enforces its own limits on).
+const MAX_PHOTO_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB
+const MAX_VIDEO_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024; // 5GB
 
 @Injectable()
 export class MediaService {
@@ -15,15 +21,36 @@ export class MediaService {
     private readonly mux: MuxService,
     private readonly watermark: WatermarkService,
     private readonly galleryService: GalleryService,
+    private readonly ownerContext: OwnerContextService,
   ) {}
 
-  async initUpload(dto: UploadInitDto): Promise<UploadInitResponse> {
+  /** Only the studio owner may upload into a gallery — clients only ever read/react via the password gate. */
+  private async getOwnedGalleryOrThrow(galleryId: string) {
+    const ownerId = await this.ownerContext.getOwnerId();
     const gallery = await this.prisma.gallery.findUnique({
-      where: { id: dto.galleryId },
+      where: { id: galleryId },
+      include: { booking: true },
     });
-    if (!gallery) throw new NotFoundException('Gallery not found');
+    if (!gallery || gallery.booking.ownerId !== ownerId) {
+      throw new NotFoundException('Gallery not found');
+    }
+    return gallery;
+  }
+
+  async initUpload(dto: UploadInitDto): Promise<UploadInitResponse> {
+    const gallery = await this.getOwnedGalleryOrThrow(dto.galleryId);
 
     const isVideo = dto.mimeType.startsWith('video/');
+    if (!isVideo && !dto.mimeType.startsWith('image/')) {
+      throw new BadRequestException('Only image/* and video/* uploads are supported');
+    }
+
+    const maxBytes = isVideo ? MAX_VIDEO_UPLOAD_BYTES : MAX_PHOTO_UPLOAD_BYTES;
+    if (dto.fileSizeBytes > maxBytes) {
+      throw new BadRequestException(
+        `File exceeds the ${Math.round(maxBytes / (1024 * 1024))}MB limit for ${isVideo ? 'video' : 'photo'} uploads`,
+      );
+    }
 
     if (isVideo) {
       const { uploadUrl, uploadId } = await this.mux.createDirectUpload();
@@ -50,15 +77,25 @@ export class MediaService {
       },
     });
     const key = this.storage.originalKey(gallery.id, media.id, dto.fileName);
-    const uploadUrl = await this.storage.createPresignedPutUrl(key, dto.mimeType);
+    const uploadUrl = await this.storage.createPresignedPutUrl(
+      key,
+      dto.mimeType,
+      dto.fileSizeBytes,
+    );
     await this.prisma.media.update({ where: { id: media.id }, data: { r2Key: key } });
 
     return { kind: 'r2_put', mediaId: media.id, uploadUrl };
   }
 
   async completeUpload(mediaId: string) {
-    const media = await this.prisma.media.findUnique({ where: { id: mediaId } });
-    if (!media) throw new NotFoundException('Media not found');
+    const ownerId = await this.ownerContext.getOwnerId();
+    const media = await this.prisma.media.findUnique({
+      where: { id: mediaId },
+      include: { gallery: { include: { booking: true } } },
+    });
+    if (!media || media.gallery.booking.ownerId !== ownerId) {
+      throw new NotFoundException('Media not found');
+    }
     if (media.storageProvider !== 'R2' || !media.r2Key) {
       throw new BadRequestException('Only R2-backed photo uploads use this endpoint');
     }
