@@ -105,6 +105,7 @@ model Booking {
   questionnaireResponses QuestionnaireResponse[]
   expenses              Expense[]
   emailLogs             EmailLog[]
+  equipmentAssignments  BookingEquipment[]
 
   @@index([ownerId])
   @@index([clientId])
@@ -225,20 +226,23 @@ model Expense {
 // ---------- Automated workflows ----------
 
 model EmailLog {
-  id             String   @id @default(cuid())
+  id             String     @id @default(cuid())
   ownerId        String
-  owner          User     @relation(fields: [ownerId], references: [id])
+  owner          User       @relation(fields: [ownerId], references: [id])
   bookingId      String?
-  booking        Booking? @relation(fields: [bookingId], references: [id])
-  type           String // "shoot_reminder" | "invoice_overdue"
+  booking        Booking?   @relation(fields: [bookingId], references: [id])
+  equipmentId    String?
+  equipment      Equipment? @relation(fields: [equipmentId], references: [id])
+  type           String // "shoot_reminder" | "invoice_overdue" | "equipment_service_due"
   recipientEmail String
   subject        String
   body           String
   status         String // "sent" | "skipped_not_configured" | "failed"
-  createdAt      DateTime @default(now())
+  createdAt      DateTime   @default(now())
 
   @@index([ownerId])
   @@index([bookingId])
+  @@index([equipmentId])
 }
 
 // ---------- Media / Galleries ----------
@@ -323,8 +327,27 @@ model Equipment {
   lastServicedAt  DateTime?
   nextServiceDue  DateTime?
   notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bookingAssignments BookingEquipment[]
+  emailLogs          EmailLog[]
 
   @@index([ownerId])
+}
+
+// A gear "packing list" per shoot — which equipment is assigned to which booking.
+model BookingEquipment {
+  id          String    @id @default(cuid())
+  bookingId   String
+  booking     Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([bookingId, equipmentId])
+  @@index([bookingId])
+  @@index([equipmentId])
 }
 
 // ---------- Locations ----------

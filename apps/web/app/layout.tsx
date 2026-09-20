@@ -76,6 +76,18 @@ export default function RootLayout({
                 Notifications
               </Link>
               <Link
+                href="/equipment"
+                className="text-sm text-slate-600 hover:text-slate-900"
+              >
+                Equipment
+              </Link>
+              <Link
+                href="/locations"
+                className="text-sm text-slate-600 hover:text-slate-900"
+              >
+                Locations
+              </Link>
+              <Link
                 href="/book"
                 className="ml-auto text-sm text-slate-400 hover:text-slate-600"
               >

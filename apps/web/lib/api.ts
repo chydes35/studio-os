@@ -1,4 +1,5 @@
 import type {
+  AddLocationPhotoDto,
   AddMediaCommentDto,
   BookingStage,
   CreateAvailabilityRuleDto,
@@ -7,12 +8,16 @@ import type {
   CreateClientDto,
   CreateContractDto,
   CreateContractTemplateDto,
+  CreateEquipmentDto,
   CreateExpenseDto,
   CreateInvoiceDto,
+  CreateLocationDto,
   CreateQuestionnaireTemplateDto,
   PublicBookingRequestDto,
   QuestionnaireField,
   SignContractDto,
+  UpdateEquipmentDto,
+  UpdateLocationDto,
   UploadInitResponse,
 } from "@repo/shared";
 
@@ -31,10 +36,58 @@ export type Booking = {
   id: string;
   clientId: string;
   client: Client;
+  locationId: string | null;
+  location?: Location | null;
   shootType: string;
   stage: BookingStage;
   scheduledAt: string | null;
   createdAt: string;
+};
+
+export type Equipment = {
+  id: string;
+  name: string;
+  serialNumber: string | null;
+  purchaseDate: string | null;
+  lastServicedAt: string | null;
+  nextServiceDue: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BookingEquipment = {
+  id: string;
+  bookingId: string;
+  equipmentId: string;
+  equipment: Equipment;
+  createdAt: string;
+};
+
+export type LocationPhoto = {
+  id: string;
+  locationId: string;
+  r2Key: string;
+  caption: string | null;
+  url: string;
+  createdAt: string;
+};
+
+export type Location = {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  bestTimeOfDay: string | null;
+  notes: string | null;
+  createdAt: string;
+  photos: LocationPhoto[];
+};
+
+export type GeocodeResult = {
+  displayName: string;
+  latitude: number;
+  longitude: number;
 };
 
 export type AvailabilityRule = {
@@ -383,8 +436,81 @@ export const api = {
 
   listEmailLogs: () => request<EmailLog[]>("/notifications/email-log"),
   runNotificationsNow: () =>
-    request<{ remindersSent: number; overdueProcessed: number }>(
-      "/notifications/run-now",
-      { method: "POST" },
+    request<{
+      remindersSent: number;
+      overdueProcessed: number;
+      equipmentAlertsSent: number;
+    }>("/notifications/run-now", { method: "POST" }),
+
+  listEquipment: () => request<Equipment[]>("/equipment"),
+  createEquipment: (dto: CreateEquipmentDto) =>
+    request<Equipment>("/equipment", { method: "POST", body: JSON.stringify(dto) }),
+  updateEquipment: (id: string, dto: UpdateEquipmentDto) =>
+    request<Equipment>(`/equipment/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(dto),
+    }),
+  deleteEquipment: (id: string) =>
+    request<{ id: string }>(`/equipment/${id}`, { method: "DELETE" }),
+
+  listBookingEquipment: (bookingId: string) =>
+    request<BookingEquipment[]>(`/bookings/${bookingId}/equipment`),
+  assignEquipmentToBooking: (bookingId: string, equipmentId: string) =>
+    request<BookingEquipment>(`/bookings/${bookingId}/equipment`, {
+      method: "POST",
+      body: JSON.stringify({ equipmentId }),
+    }),
+  unassignEquipmentFromBooking: (bookingId: string, equipmentId: string) =>
+    request<{ bookingId: string; equipmentId: string }>(
+      `/bookings/${bookingId}/equipment/${equipmentId}`,
+      { method: "DELETE" },
     ),
+
+  listLocations: () => request<Location[]>("/locations"),
+  createLocation: (dto: CreateLocationDto) =>
+    request<Location>("/locations", { method: "POST", body: JSON.stringify(dto) }),
+  updateLocation: (id: string, dto: UpdateLocationDto) =>
+    request<Location>(`/locations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(dto),
+    }),
+  deleteLocation: (id: string) =>
+    request<{ id: string }>(`/locations/${id}`, { method: "DELETE" }),
+  geocodeAddress: (query: string) =>
+    request<GeocodeResult[]>(`/locations/geocode?q=${encodeURIComponent(query)}`),
+  deleteLocationPhoto: (locationId: string, photoId: string) =>
+    request<{ id: string }>(`/locations/${locationId}/photos/${photoId}`, {
+      method: "DELETE",
+    }),
+
+  /** Same direct-to-storage presigned PUT pattern as gallery uploads. */
+  async uploadLocationPhoto(
+    locationId: string,
+    file: File,
+    caption?: string,
+  ): Promise<{ photoId: string }> {
+    const dto: AddLocationPhotoDto = {
+      fileName: file.name,
+      fileSizeBytes: file.size,
+      mimeType: file.type || "application/octet-stream",
+      caption,
+    };
+    const { photoId, uploadUrl } = await request<{ photoId: string; uploadUrl: string }>(
+      `/locations/${locationId}/photos`,
+      { method: "POST", body: JSON.stringify(dto) },
+    );
+    const res = await fetch(uploadUrl, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+    });
+    if (!res.ok) throw new Error("Upload failed");
+    return { photoId };
+  },
+
+  updateBookingLocation: (bookingId: string, locationId: string | null) =>
+    request<Booking>(`/bookings/${bookingId}/location`, {
+      method: "PATCH",
+      body: JSON.stringify({ locationId }),
+    }),
 };

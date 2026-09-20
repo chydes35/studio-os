@@ -105,4 +105,8 @@ export class StorageService {
   contractKey(contractId: string) {
     return `contracts/${contractId}.pdf`;
   }
+
+  locationPhotoKey(locationId: string, photoId: string, fileName: string) {
+    return `locations/${locationId}/${photoId}-${fileName}`;
+  }
 }

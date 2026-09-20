@@ -8,7 +8,9 @@ import { BookingsModule } from './bookings/bookings.module.js';
 import { ClientsModule } from './clients/clients.module.js';
 import { ContractsModule } from './contracts/contracts.module.js';
 import { DbModule } from './db/db.module.js';
+import { EquipmentModule } from './equipment/equipment.module.js';
 import { GalleryModule } from './gallery/gallery.module.js';
+import { LocationsModule } from './locations/locations.module.js';
 import { MediaModule } from './media/media.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { OwnerModule } from './owner/owner.module.js';
@@ -32,6 +34,8 @@ import { StorageModule } from './storage/storage.module.js';
     PaymentsModule,
     QuestionnairesModule,
     NotificationsModule,
+    EquipmentModule,
+    LocationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

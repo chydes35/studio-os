@@ -214,3 +214,48 @@ export const submitQuestionnaireSchema = z.object({
   answers: z.record(z.string(), z.union([z.string(), z.boolean()])),
 });
 export type SubmitQuestionnaireDto = z.infer<typeof submitQuestionnaireSchema>;
+
+// ---------- Equipment & Locations (Phase 7) ----------
+
+export const createEquipmentSchema = z.object({
+  name: z.string().min(1),
+  serialNumber: z.string().optional(),
+  purchaseDate: z.coerce.date().optional(),
+  lastServicedAt: z.coerce.date().optional(),
+  nextServiceDue: z.coerce.date().optional(),
+  notes: z.string().optional(),
+});
+export type CreateEquipmentDto = z.infer<typeof createEquipmentSchema>;
+
+export const updateEquipmentSchema = createEquipmentSchema.partial();
+export type UpdateEquipmentDto = z.infer<typeof updateEquipmentSchema>;
+
+export const assignEquipmentToBookingSchema = z.object({
+  equipmentId: z.string().min(1),
+});
+export type AssignEquipmentToBookingDto = z.infer<typeof assignEquipmentToBookingSchema>;
+
+export const createLocationSchema = z.object({
+  name: z.string().min(1),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  bestTimeOfDay: z.string().optional(),
+  notes: z.string().optional(),
+});
+export type CreateLocationDto = z.infer<typeof createLocationSchema>;
+
+export const updateLocationSchema = createLocationSchema.partial();
+export type UpdateLocationDto = z.infer<typeof updateLocationSchema>;
+
+export const addLocationPhotoSchema = z.object({
+  fileName: z.string().min(1),
+  fileSizeBytes: z.number().positive().max(MAX_UPLOAD_BYTES),
+  mimeType: z.string().min(1).startsWith("image/"),
+  caption: z.string().optional(),
+});
+export type AddLocationPhotoDto = z.infer<typeof addLocationPhotoSchema>;
+
+export const setBookingLocationSchema = z.object({
+  locationId: z.string().min(1).nullable(),
+});
+export type SetBookingLocationDto = z.infer<typeof setBookingLocationSchema>;

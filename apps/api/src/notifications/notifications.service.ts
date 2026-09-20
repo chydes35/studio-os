@@ -6,6 +6,7 @@ import { EmailService } from './email.service.js';
 
 const REMINDER_DAYS_BEFORE = 3;
 const OVERDUE_RESEND_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const SERVICE_DUE_WARNING_DAYS = 14;
 
 function startOfDay(d: Date): Date {
   const copy = new Date(d);
@@ -23,13 +24,18 @@ export class NotificationsService {
     private readonly email: EmailService,
   ) {}
 
-  async runDailyChecks(): Promise<{ remindersSent: number; overdueProcessed: number }> {
+  async runDailyChecks(): Promise<{
+    remindersSent: number;
+    overdueProcessed: number;
+    equipmentAlertsSent: number;
+  }> {
     const remindersSent = await this.checkShootReminders();
     const overdueProcessed = await this.checkOverdueInvoices();
+    const equipmentAlertsSent = await this.checkEquipmentServiceDue();
     this.logger.log(
-      `Daily checks complete: ${remindersSent} shoot reminder(s), ${overdueProcessed} overdue invoice(s) processed`,
+      `Daily checks complete: ${remindersSent} shoot reminder(s), ${overdueProcessed} overdue invoice(s), ${equipmentAlertsSent} equipment alert(s)`,
     );
-    return { remindersSent, overdueProcessed };
+    return { remindersSent, overdueProcessed, equipmentAlertsSent };
   }
 
   private async checkShootReminders(): Promise<number> {
@@ -113,6 +119,58 @@ export class NotificationsService {
           bookingId: invoice.bookingId,
           type: 'invoice_overdue',
           recipientEmail: invoice.booking.client.email,
+          subject,
+          body: html,
+          status: result.delivered ? 'sent' : 'skipped_not_configured',
+        },
+      });
+      count++;
+    }
+    return count;
+  }
+
+  /**
+   * Alerts the studio owner (not a client) when gear is due for service.
+   * Dedup is scoped to `updatedAt` rather than "ever": once alerted for the
+   * current `nextServiceDue`, it won't nag again unless the owner touches
+   * the record (e.g. servicing it and pushing the date out resets the cycle).
+   */
+  private async checkEquipmentServiceDue(): Promise<number> {
+    const ownerId = await this.ownerContext.getOwnerId();
+    const owner = await this.prisma.user.findUnique({ where: { id: ownerId } });
+    if (!owner) return 0;
+
+    const windowEnd = new Date(Date.now() + SERVICE_DUE_WARNING_DAYS * 24 * 60 * 60 * 1000);
+    const dueItems = await this.prisma.equipment.findMany({
+      where: { ownerId, nextServiceDue: { lte: windowEnd } },
+    });
+
+    let count = 0;
+    for (const item of dueItems) {
+      const alreadyAlerted = await this.prisma.emailLog.findFirst({
+        where: {
+          equipmentId: item.id,
+          type: 'equipment_service_due',
+          createdAt: { gte: item.updatedAt },
+        },
+      });
+      if (alreadyAlerted) continue;
+
+      const overdue = item.nextServiceDue! < new Date();
+      const subject = `${overdue ? 'Overdue' : 'Upcoming'} service: ${item.name}`;
+      const html = `<p>${item.name}${item.serialNumber ? ` (S/N ${item.serialNumber})` : ''} is ${
+        overdue
+          ? 'overdue for service'
+          : `due for service on ${item.nextServiceDue!.toLocaleDateString()}`
+      }.</p>`;
+      const result = await this.email.send({ to: owner.email, subject, html });
+
+      await this.prisma.emailLog.create({
+        data: {
+          ownerId,
+          equipmentId: item.id,
+          type: 'equipment_service_due',
+          recipientEmail: owner.email,
           subject,
           body: html,
           status: result.delivered ? 'sent' : 'skipped_not_configured',

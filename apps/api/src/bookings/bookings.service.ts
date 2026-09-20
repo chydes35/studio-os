@@ -35,7 +35,7 @@ export class BookingsService {
     const ownerId = await this.ownerContext.getOwnerId();
     const booking = await this.prisma.booking.findFirst({
       where: { id, ownerId },
-      include: { client: true },
+      include: { client: true, location: true },
     });
     if (!booking) throw new NotFoundException('Booking not found');
     return booking;
@@ -99,6 +99,25 @@ export class BookingsService {
       where: { id },
       data: { stage },
       include: { client: true },
+    });
+  }
+
+  async updateLocation(id: string, locationId: string | null) {
+    const ownerId = await this.ownerContext.getOwnerId();
+    const booking = await this.prisma.booking.findFirst({ where: { id, ownerId } });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    if (locationId) {
+      const location = await this.prisma.location.findFirst({
+        where: { id: locationId, ownerId },
+      });
+      if (!location) throw new NotFoundException('Location not found');
+    }
+
+    return this.prisma.booking.update({
+      where: { id },
+      data: { locationId },
+      include: { client: true, location: true },
     });
   }
 }

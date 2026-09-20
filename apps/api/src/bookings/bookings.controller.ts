@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import {
   createBookingSchema,
   publicBookingRequestSchema,
+  setBookingLocationSchema,
   updateBookingStageSchema,
 } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
@@ -44,5 +45,14 @@ export class BookingsController {
     body: ReturnType<typeof updateBookingStageSchema.parse>,
   ) {
     return this.bookingsService.updateStage(id, body.stage);
+  }
+
+  @Patch(':id/location')
+  updateLocation(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(setBookingLocationSchema))
+    body: ReturnType<typeof setBookingLocationSchema.parse>,
+  ) {
+    return this.bookingsService.updateLocation(id, body.locationId);
   }
 }
