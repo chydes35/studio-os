@@ -6,6 +6,8 @@ import { PRISMA } from '../db/db.module.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { AuthService, toAuthUser } from './auth.service.js';
 import { Public } from './public.decorator.js';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../rate-limit/rate-limit.module.js';
 
 @Controller('auth')
 export class AuthController {
@@ -15,6 +17,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle({ default: RATE_LIMITS.register })
   @Post('register')
   register(
     @Body(new ZodValidationPipe(registerSchema))
@@ -24,6 +27,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: RATE_LIMITS.login })
   @Post('login')
   login(
     @Body(new ZodValidationPipe(loginSchema))

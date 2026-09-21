@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { PrismaClient } from '@repo/db';
+import type { Prisma, PrismaClient } from '@repo/db';
 import type {
   BookingStage,
   CreateBookingDto,
@@ -99,10 +99,47 @@ export class BookingsService {
         );
       }
 
-      const client = await tx.client.upsert({
-        where: { ownerId_email: { email: dto.clientEmail, ownerId } },
-        update: { name: dto.clientName, phone: dto.clientPhone },
-        create: {
+      const { clientId, submittedDetailsNote } = await this.resolvePortalClient(
+        tx,
+        ownerId,
+        dto,
+      );
+
+      return tx.booking.create({
+        data: {
+          ownerId,
+          clientId,
+          shootType: dto.shootType,
+          stage: 'INQUIRY',
+          scheduledAt: dto.scheduledAt,
+          durationMins: dto.durationMins,
+          notes: [submittedDetailsNote, dto.notes].filter(Boolean).join('\n\n') || undefined,
+        },
+        include: { client: true },
+      });
+    });
+  }
+
+  /**
+   * Finds or creates the portal submitter's Client record. The portal is
+   * public and unauthenticated, so an existing client's details are never
+   * overwritten from it: anyone who knows a client's email could otherwise
+   * rename them or change their phone number in the owner's CRM. Only a
+   * missing phone is filled in. If the submitted details differ from what's
+   * on file, they're recorded on the booking instead, for the owner to see.
+   */
+  private async resolvePortalClient(
+    tx: Prisma.TransactionClient,
+    ownerId: string,
+    dto: PublicBookingRequestDto,
+  ): Promise<{ clientId: string; submittedDetailsNote?: string }> {
+    const existing = await tx.client.findUnique({
+      where: { ownerId_email: { email: dto.clientEmail, ownerId } },
+    });
+
+    if (!existing) {
+      const created = await tx.client.create({
+        data: {
           ownerId,
           name: dto.clientName,
           email: dto.clientEmail,
@@ -110,20 +147,28 @@ export class BookingsService {
           source: 'Booking portal',
         },
       });
+      return { clientId: created.id };
+    }
 
-      return tx.booking.create({
-        data: {
-          ownerId,
-          clientId: client.id,
-          shootType: dto.shootType,
-          stage: 'INQUIRY',
-          scheduledAt: dto.scheduledAt,
-          durationMins: dto.durationMins,
-          notes: dto.notes,
-        },
-        include: { client: true },
+    if (!existing.phone && dto.clientPhone) {
+      await tx.client.update({
+        where: { id: existing.id },
+        data: { phone: dto.clientPhone },
       });
-    });
+    }
+
+    const nameDiffers = dto.clientName !== existing.name;
+    const phoneDiffers = Boolean(existing.phone && dto.clientPhone && dto.clientPhone !== existing.phone);
+    if (!nameDiffers && !phoneDiffers) return { clientId: existing.id };
+
+    const submitted = [
+      nameDiffers ? `name "${dto.clientName}"` : null,
+      phoneDiffers ? `phone "${dto.clientPhone}"` : null,
+    ].filter(Boolean);
+    return {
+      clientId: existing.id,
+      submittedDetailsNote: `Booking portal: submitted with ${submitted.join(' and ')}, which differs from this client's record (not changed).`,
+    };
   }
 
   async updateStage(id: string, stage: BookingStage) {

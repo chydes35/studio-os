@@ -3,6 +3,8 @@ import { createInvoiceSchema, markInvoicePaidSchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
 import { InvoicesService } from './invoices.service.js';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../rate-limit/rate-limit.module.js';
 
 @Controller()
 export class InvoicesController {
@@ -43,6 +45,7 @@ export class InvoicesController {
   }
 
   @Public()
+  @Throttle({ default: RATE_LIMITS.publicSubmit })
   @Post('invoices/:id/checkout')
   createCheckoutSession(@Param('id') id: string) {
     return this.invoicesService.createCheckoutSession(id);

@@ -4,6 +4,8 @@ import { createContractSchema, signContractSchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
 import { ContractsService } from './contracts.service.js';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../rate-limit/rate-limit.module.js';
 
 @Controller()
 export class ContractsController {
@@ -30,6 +32,7 @@ export class ContractsController {
   }
 
   @Public()
+  @Throttle({ default: RATE_LIMITS.publicSubmit })
   @Post('contracts/:id/sign')
   sign(
     @Param('id') id: string,

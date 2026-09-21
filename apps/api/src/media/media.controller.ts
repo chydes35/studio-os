@@ -3,6 +3,8 @@ import { addMediaCommentSchema, toggleFavoriteSchema, uploadInitSchema } from '@
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
 import { MediaService } from './media.service.js';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../rate-limit/rate-limit.module.js';
 
 @Controller('media')
 export class MediaController {
@@ -22,6 +24,7 @@ export class MediaController {
   }
 
   @Public()
+  @Throttle({ default: RATE_LIMITS.galleryAction })
   @Post(':id/favorite')
   toggleFavorite(
     @Param('id') id: string,
@@ -32,6 +35,7 @@ export class MediaController {
   }
 
   @Public()
+  @Throttle({ default: RATE_LIMITS.galleryAction })
   @Post(':id/comments')
   addComment(
     @Param('id') id: string,

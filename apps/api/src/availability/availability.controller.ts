@@ -8,6 +8,8 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
 import { AvailabilityService } from './availability.service.js';
 import { SlotsService } from './slots.service.js';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../rate-limit/rate-limit.module.js';
 
 @Controller('availability')
 export class AvailabilityController {
@@ -54,6 +56,7 @@ export class AvailabilityController {
 
   /** Public booking portal only — the owner dashboard never calls this. */
   @Public()
+  @Throttle({ default: RATE_LIMITS.publicSlots })
   @Get('slots/:ownerId')
   getSlots(
     @Param('ownerId') ownerId: string,

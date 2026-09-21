@@ -8,6 +8,8 @@ import {
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
 import { BookingsService } from './bookings.service.js';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../rate-limit/rate-limit.module.js';
 
 @Controller('bookings')
 export class BookingsController {
@@ -33,6 +35,7 @@ export class BookingsController {
 
   /** Public booking portal — `ownerId` identifies whose portal this is, no login on this request. */
   @Public()
+  @Throttle({ default: RATE_LIMITS.publicBookingRequest })
   @Post('public-request/:ownerId')
   createPublicRequest(
     @Param('ownerId') ownerId: string,

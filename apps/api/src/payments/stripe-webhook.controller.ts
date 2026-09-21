@@ -11,6 +11,7 @@ import type Stripe from 'stripe';
 import { Public } from '../auth/public.decorator.js';
 import { InvoicesService } from './invoices.service.js';
 import { StripeService } from './stripe.service.js';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @Controller('stripe')
 export class StripeWebhookController {
@@ -28,6 +29,8 @@ export class StripeWebhookController {
    * bearer token, its own signature (verified above) is the security boundary.
    */
   @Public()
+  // Stripe retries in bursts and signs every call; never throttle it.
+  @SkipThrottle()
   @Post('webhook')
   async handleWebhook(
     @Req() req: RawBodyRequest<Request>,
