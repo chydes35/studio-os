@@ -61,6 +61,12 @@ jobs:
             --to-schema-datamodel prisma/schema.prisma \
             --exit-code
 
+      # `expo start` normally generates this (gitignored) file; it's what
+      # declares types for side-effect imports like `@/global.css`, so a
+      # fresh checkout can't type-check mobile without it.
+      - name: Generate Expo type declarations
+        run: echo '/// <reference types="expo/types" />' > apps/mobile/expo-env.d.ts
+
       - name: Type-check
         run: npx turbo run check-types
 
