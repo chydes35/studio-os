@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Types, lint, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: studio_os
+          POSTGRES_PASSWORD: studio_os
+          POSTGRES_DB: studio_os_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U studio_os"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://studio_os:studio_os@localhost:5432/studio_os_ci
+      TURBO_TELEMETRY_DISABLED: 1
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+          cache: npm
+
+      # package.json pins npm via devEngines; match it exactly.
+      - run: npm install -g npm@11.19.1
+
+      - run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run generate --workspace=@repo/db
+
+      # Migrations are hand-written in this repo (prisma migrate dev can't
+      # run non-interactively), so verify they apply cleanly to an empty
+      # database and produce exactly what schema.prisma describes.
+      - name: Check migrations match schema
+        working-directory: packages/db
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code
+
+      # `expo start` normally generates this (gitignored) file; it's what
+      # declares types for side-effect imports like `@/global.css`, so a
+      # fresh checkout can't type-check mobile without it.
+      - name: Generate Expo type declarations
+        run: echo '/// <reference types="expo/types" />' > apps/mobile/expo-env.d.ts
+
+      - name: Type-check
+        run: npx turbo run check-types
+
+      # mobile is excluded: `expo lint` currently crashes inside
+      # eslint-config-expo and, when its config is missing, installs
+      # packages and rewrites package-lock.json instead of linting.
+      - name: Lint
+        run: npx turbo run lint --filter=!mobile
+
+      - name: Test
+        run: npx turbo run test
+
+      - name: Build
+        run: npx turbo run build --filter=api --filter=web

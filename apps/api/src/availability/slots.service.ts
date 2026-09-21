@@ -1,6 +1,8 @@
-import { Inject, Injectable } from '@nestjs/common';
-import type { PrismaClient } from '@repo/db';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma, PrismaClient } from '@repo/db';
+import type { AvailableSlotsResponse } from '@repo/shared';
 import { PRISMA } from '../db/db.module.js';
+import { addDays, dayOfWeek, zonedWallTimeToUtc } from './zoned-time.js';
 
 interface Interval {
   start: Date;
@@ -11,12 +13,10 @@ function overlaps(a: Interval, b: Interval): boolean {
   return a.start < b.end && b.start < a.end;
 }
 
-function parseTimeOnDate(date: Date, time: string): Date {
-  const [hours, minutes] = time.split(':').map(Number);
-  const result = new Date(date);
-  result.setHours(hours ?? 0, minutes ?? 0, 0, 0);
-  return result;
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Either the root client or an interactive-transaction client. */
+type Db = PrismaClient | Prisma.TransactionClient;
 
 @Injectable()
 export class SlotsService {
@@ -26,41 +26,58 @@ export class SlotsService {
    * Only ever called from the public booking portal (no logged-in owner on
    * that request), so `ownerId` is an explicit parameter resolved by the
    * caller from the portal's URL, not from OwnerContextService.
+   *
+   * `dateStr` and every rule's HH:MM are wall-clock times in the *owner's*
+   * time zone (User.timezone), never the server's. Pass `db` to run the
+   * reads inside a caller's transaction (see BookingsService).
    */
-  async getAvailableSlots(ownerId: string, dateStr: string, durationMins: number) {
-    const date = new Date(`${dateStr}T00:00:00`);
-    const dayOfWeek = date.getDay();
-    const dayStart = new Date(date);
-    const dayEnd = new Date(date);
-    dayEnd.setDate(dayEnd.getDate() + 1);
+  async getAvailableSlots(
+    ownerId: string,
+    dateStr: string,
+    durationMins: number,
+    db: Db = this.prisma,
+  ): Promise<AvailableSlotsResponse> {
+    const owner = await db.user.findUnique({
+      where: { id: ownerId },
+      select: { timezone: true },
+    });
+    if (!owner) throw new NotFoundException('Booking page not found');
+    const { timezone } = owner;
 
+    const dayStart = zonedWallTimeToUtc(dateStr, '00:00', timezone);
+    const dayEnd = zonedWallTimeToUtc(addDays(dateStr, 1), '00:00', timezone);
+
+    // Busy intervals are fetched with a day of margin on each side: a booking
+    // that starts late the previous evening can run into this day, and a
+    // rule's buffer can extend a candidate slot past either day boundary.
     const [rules, bookings, blocks] = await Promise.all([
-      this.prisma.availabilityRule.findMany({ where: { ownerId, dayOfWeek } }),
-      this.prisma.booking.findMany({
+      db.availabilityRule.findMany({ where: { ownerId, dayOfWeek: dayOfWeek(dateStr) } }),
+      db.booking.findMany({
         where: {
           ownerId,
-          scheduledAt: { gte: dayStart, lt: dayEnd },
+          scheduledAt: {
+            gte: new Date(dayStart.getTime() - DAY_MS),
+            lt: new Date(dayEnd.getTime() + DAY_MS),
+          },
         },
       }),
-      this.prisma.calendarBlock.findMany({
+      db.calendarBlock.findMany({
         where: {
           ownerId,
-          startsAt: { lt: dayEnd },
-          endsAt: { gt: dayStart },
+          startsAt: { lt: new Date(dayEnd.getTime() + DAY_MS) },
+          endsAt: { gt: new Date(dayStart.getTime() - DAY_MS) },
         },
       }),
     ]);
 
-    if (rules.length === 0) return [];
+    if (rules.length === 0) return { timezone, slots: [] };
 
     const busy: Interval[] = [
       ...bookings
         .filter((b) => b.scheduledAt)
         .map((b): Interval => {
-          const start = new Date(b.scheduledAt as Date);
-          const end = new Date(start);
-          end.setMinutes(end.getMinutes() + (b.durationMins ?? 60));
-          return { start, end };
+          const start = b.scheduledAt as Date;
+          return { start, end: new Date(start.getTime() + (b.durationMins ?? 60) * 60_000) };
         }),
       ...blocks.map((b): Interval => ({ start: b.startsAt, end: b.endsAt })),
     ];
@@ -69,13 +86,12 @@ export class SlotsService {
     const slots: string[] = [];
 
     for (const rule of rules) {
-      const windowStart = parseTimeOnDate(date, rule.startTime);
-      const windowEnd = parseTimeOnDate(date, rule.endTime);
+      const windowStart = zonedWallTimeToUtc(dateStr, rule.startTime, timezone);
+      const windowEnd = zonedWallTimeToUtc(dateStr, rule.endTime, timezone);
 
-      let cursor = new Date(windowStart);
+      let cursor = windowStart;
       while (true) {
-        const slotEnd = new Date(cursor);
-        slotEnd.setMinutes(slotEnd.getMinutes() + durationMins);
+        const slotEnd = new Date(cursor.getTime() + durationMins * 60_000);
         if (slotEnd > windowEnd) break;
 
         const bufferedInterval: Interval = {
@@ -93,6 +109,6 @@ export class SlotsService {
       }
     }
 
-    return slots.sort();
+    return { timezone, slots: slots.sort() };
   }
 }

@@ -18,6 +18,7 @@ async function main() {
       name: "Studio Owner",
       passwordHash: DEV_OWNER_PASSWORD_HASH,
       role: "OWNER",
+      timezone: "America/Chicago",
     },
   });
 

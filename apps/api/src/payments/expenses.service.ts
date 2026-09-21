@@ -21,6 +21,13 @@ export class ExpensesService {
 
   async create(dto: CreateExpenseDto) {
     const ownerId = await this.ownerContext.getOwnerId();
+    if (dto.bookingId) {
+      // Client-supplied id: must be one of this owner's own bookings.
+      const booking = await this.prisma.booking.findFirst({
+        where: { id: dto.bookingId, ownerId },
+      });
+      if (!booking) throw new NotFoundException('Booking not found');
+    }
     return this.prisma.expense.create({ data: { ...dto, ownerId } });
   }
 
