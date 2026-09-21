@@ -82,7 +82,7 @@ export class InvoicesService {
   }
 
   async markPaid(id: string, amountCents: number) {
-    const invoice = await this.findOwned(id);
+    await this.findOwned(id);
     await this.prisma.payment.create({
       data: { invoiceId: id, amountCents, method: 'manual' },
     });

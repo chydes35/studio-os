@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
+import { getCorsOrigins } from './config/runtime-config.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
@@ -12,7 +13,14 @@ async function bootstrap() {
   if (trustProxy) {
     app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
   }
-  app.enableCors();
+  const corsOrigins = getCorsOrigins(process.env);
+  app.enableCors({
+    origin(origin, callback) {
+      // Native clients and command-line requests have no Origin header.
+      if (!origin || corsOrigins.has(origin)) return callback(null, true);
+      return callback(new Error('Origin is not allowed by CORS'), false);
+    },
+  });
   await app.listen(process.env.PORT ?? 3001);
 }
 await bootstrap();

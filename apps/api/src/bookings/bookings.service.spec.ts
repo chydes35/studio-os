@@ -115,9 +115,19 @@ describe('BookingsService.createPublicRequest — existing client records', () =
 
   it('creates a new client when the email is unknown', async () => {
     const { tx, service } = setup(null);
-    await service.createPublicRequest(OWNER, request({ clientPhone: '555-0100' }));
+    const confirmation = await service.createPublicRequest(OWNER, request({ clientPhone: '555-0100' }));
     expect(tx.client.create).toHaveBeenCalledOnce();
     expect(tx.booking.create.mock.calls[0]![0].data.clientId).toBe('client_new');
+    expect(confirmation).toEqual({
+      id: 'booking_new',
+      shootType: 'Portrait',
+      stage: 'INQUIRY',
+      scheduledAt: SLOT,
+      durationMins: 60,
+    });
+    expect(confirmation).not.toHaveProperty('client');
+    expect(confirmation).not.toHaveProperty('clientId');
+    expect(confirmation).not.toHaveProperty('ownerId');
   });
 
   it("never renames an existing client, and notes the submitted name on the booking", async () => {
@@ -136,14 +146,11 @@ describe('BookingsService.createPublicRequest — existing client records', () =
     expect(data.notes).toMatch(/hi$/);
   });
 
-  it('fills in a missing phone number without touching the name', async () => {
+  it('does not modify an existing client even when its phone number is missing', async () => {
     const { tx, service } = setup(EXISTING);
     await service.createPublicRequest(OWNER, request({ clientPhone: '555-0100' }));
 
-    expect(tx.client.update).toHaveBeenCalledWith({
-      where: { id: 'client_existing' },
-      data: { phone: '555-0100' },
-    });
-    expect(tx.booking.create.mock.calls[0]![0].data.notes).toBeUndefined();
+    expect(tx.client.update).not.toHaveBeenCalled();
+    expect(tx.booking.create.mock.calls[0]![0].data.notes).toContain('phone "555-0100"');
   });
 });

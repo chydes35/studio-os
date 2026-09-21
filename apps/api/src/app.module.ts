@@ -19,10 +19,11 @@ import { PaymentsModule } from './payments/payments.module.js';
 import { QuestionnairesModule } from './questionnaires/questionnaires.module.js';
 import { RateLimitModule } from './rate-limit/rate-limit.module.js';
 import { StorageModule } from './storage/storage.module.js';
+import { validateRuntimeConfig } from './config/runtime-config.js';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateRuntimeConfig }),
     ScheduleModule.forRoot(),
     // Before AuthModule so its guard runs first: rejected logins still count.
     RateLimitModule,
