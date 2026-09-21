@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Inject, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Patch, Post, Req, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import type { PrismaClient } from '@repo/db';
-import { loginSchema, registerSchema } from '@repo/shared';
+import { loginSchema, registerSchema, updateProfileSchema } from '@repo/shared';
 import { PRISMA } from '../db/db.module.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
-import { AuthService } from './auth.service.js';
+import { AuthService, toAuthUser } from './auth.service.js';
 import { Public } from './public.decorator.js';
 
 @Controller('auth')
@@ -38,6 +38,21 @@ export class AuthController {
     if (!req.user) throw new UnauthorizedException();
     const user = await this.prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user) throw new UnauthorizedException();
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
+    return toAuthUser(user);
+  }
+
+  /** Owner's own settings — currently just the studio time zone used for availability. */
+  @Patch('me')
+  async updateMe(
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(updateProfileSchema))
+    body: ReturnType<typeof updateProfileSchema.parse>,
+  ) {
+    if (!req.user) throw new UnauthorizedException();
+    const user = await this.prisma.user.update({
+      where: { id: req.user.id },
+      data: { timezone: body.timezone },
+    });
+    return toAuthUser(user);
   }
 }

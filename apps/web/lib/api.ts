@@ -3,6 +3,7 @@ import type {
   AddMediaCommentDto,
   AuthResponse,
   AuthUser,
+  AvailableSlotsResponse,
   BookingStage,
   CreateAvailabilityRuleDto,
   CreateBookingDto,
@@ -22,6 +23,7 @@ import type {
   SignContractDto,
   UpdateEquipmentDto,
   UpdateLocationDto,
+  UpdateProfileDto,
   UploadInitResponse,
 } from "@repo/shared";
 import { clearToken, getToken } from "./auth";
@@ -316,7 +318,7 @@ export const api = {
     request<{ id: string }>(`/availability/blocks/${id}`, { method: "DELETE" }),
 
   getAvailableSlots: (ownerId: string, date: string, durationMins: number) =>
-    request<string[]>(
+    request<AvailableSlotsResponse>(
       `/availability/slots/${ownerId}?date=${date}&durationMins=${durationMins}`,
     ),
 
@@ -535,4 +537,6 @@ export const api = {
   login: (dto: LoginDto) =>
     request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(dto) }),
   getMe: () => request<AuthUser>("/auth/me"),
+  updateMe: (dto: UpdateProfileDto) =>
+    request<AuthUser>("/auth/me", { method: "PATCH", body: JSON.stringify(dto) }),
 };

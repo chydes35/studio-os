@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type AvailabilityRule, type CalendarBlock } from "../../lib/api";
+import { TimeZoneSetting } from "./TimeZoneSetting";
 
 const DAY_NAMES = [
   "Sunday",
@@ -98,6 +99,7 @@ export default function AvailabilityPage() {
   return (
     <div className="grid gap-8">
       <h1 className="text-xl font-semibold">Availability</h1>
+      <TimeZoneSetting />
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <section className="grid gap-4 lg:grid-cols-[1fr_320px]">

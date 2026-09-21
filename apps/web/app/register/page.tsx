@@ -19,7 +19,14 @@ export default function RegisterPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const { accessToken, user } = await api.register({ name, email, password });
+      const { accessToken, user } = await api.register({
+        name,
+        email,
+        password,
+        // The studio's availability hours are interpreted in this zone;
+        // changeable later on the Availability page.
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
       setToken(accessToken);
       setCachedUser(user);
       router.replace("/");
