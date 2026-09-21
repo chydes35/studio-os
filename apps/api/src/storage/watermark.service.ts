@@ -6,21 +6,27 @@ const MAX_PREVIEW_DIMENSION = 1600;
 @Injectable()
 export class WatermarkService {
   async applyWatermark(original: Buffer): Promise<Buffer> {
-    const resized = sharp(original)
+    // Materialize the resize first: `metadata()` on a pipeline reports the
+    // *input* image's dimensions, not the resized output's, so sizing the
+    // overlay from it made it larger than the preview and sharp refused to
+    // composite any photo over 1600px. Raw pixels avoid a lossy intermediate
+    // JPEG encode between the two steps.
+    const { data, info } = await sharp(original)
       .rotate() // respect EXIF orientation before we lose it in re-encoding
       .resize({
         width: MAX_PREVIEW_DIMENSION,
         height: MAX_PREVIEW_DIMENSION,
         fit: 'inside',
         withoutEnlargement: true,
-      });
+      })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
 
-    const { width = MAX_PREVIEW_DIMENSION, height = MAX_PREVIEW_DIMENSION } =
-      await resized.metadata();
+    const watermarkSvg = this.buildTiledWatermarkSvg(info.width, info.height);
 
-    const watermarkSvg = this.buildTiledWatermarkSvg(width, height);
-
-    return resized
+    return sharp(data, {
+      raw: { width: info.width, height: info.height, channels: info.channels },
+    })
       .composite([{ input: Buffer.from(watermarkSvg), top: 0, left: 0 }])
       .jpeg({ quality: 82 })
       .toBuffer();
