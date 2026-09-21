@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { createContractSchema, signContractSchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { Public } from '../auth/public.decorator.js';
 import { ContractsService } from './contracts.service.js';
 
 @Controller()
@@ -22,11 +23,13 @@ export class ContractsController {
     return this.contractsService.getForBookingOwnerView(bookingId);
   }
 
+  @Public()
   @Get('contracts/:id')
   getPublicView(@Param('id') id: string) {
     return this.contractsService.getPublicView(id);
   }
 
+  @Public()
   @Post('contracts/:id/sign')
   sign(
     @Param('id') id: string,
@@ -39,6 +42,7 @@ export class ContractsController {
     return this.contractsService.sign(id, body, signerIp, signerUserAgent);
   }
 
+  @Public()
   @Get('contracts/:id/download')
   getDownloadUrl(@Param('id') id: string) {
     return this.contractsService.getDownloadUrl(id);

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { assignQuestionnaireSchema, submitQuestionnaireSchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { Public } from '../auth/public.decorator.js';
 import { QuestionnairesService } from './questionnaires.service.js';
 
 @Controller()
@@ -21,11 +22,13 @@ export class QuestionnairesController {
     return this.questionnairesService.listForBookingOwnerView(bookingId);
   }
 
+  @Public()
   @Get('questionnaire-responses/:id')
   getPublicView(@Param('id') id: string) {
     return this.questionnairesService.getPublicView(id);
   }
 
+  @Public()
   @Post('questionnaire-responses/:id/submit')
   submit(
     @Param('id') id: string,

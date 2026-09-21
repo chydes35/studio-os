@@ -49,10 +49,14 @@ export class BookingsService {
     });
   }
 
-  async createPublicRequest(dto: PublicBookingRequestDto) {
-    const ownerId = await this.ownerContext.getOwnerId();
+  /** Public booking portal — `ownerId` comes from the portal's own URL, there's no logged-in user on this request. */
+  async createPublicRequest(ownerId: string, dto: PublicBookingRequestDto) {
+    const owner = await this.prisma.user.findUnique({ where: { id: ownerId } });
+    if (!owner) throw new NotFoundException('Booking page not found');
+
     const dateStr = dto.scheduledAt.toISOString().slice(0, 10);
     const availableSlots = await this.slotsService.getAvailableSlots(
+      ownerId,
       dateStr,
       dto.durationMins,
     );

@@ -6,6 +6,7 @@ import {
   updateBookingStageSchema,
 } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { Public } from '../auth/public.decorator.js';
 import { BookingsService } from './bookings.service.js';
 
 @Controller('bookings')
@@ -30,12 +31,15 @@ export class BookingsController {
     return this.bookingsService.create(body);
   }
 
-  @Post('public-request')
+  /** Public booking portal — `ownerId` identifies whose portal this is, no login on this request. */
+  @Public()
+  @Post('public-request/:ownerId')
   createPublicRequest(
+    @Param('ownerId') ownerId: string,
     @Body(new ZodValidationPipe(publicBookingRequestSchema))
     body: ReturnType<typeof publicBookingRequestSchema.parse>,
   ) {
-    return this.bookingsService.createPublicRequest(body);
+    return this.bookingsService.createPublicRequest(ownerId, body);
   }
 
   @Patch(':id/stage')

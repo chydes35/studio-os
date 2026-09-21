@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { createGallerySchema, unlockGallerySchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { Public } from '../auth/public.decorator.js';
 import { GalleryService } from './gallery.service.js';
 
 @Controller()
@@ -21,6 +22,7 @@ export class GalleryController {
     return this.galleryService.getForBookingOwnerView(bookingId);
   }
 
+  @Public()
   @Post('gallery/:galleryId/view')
   viewGallery(
     @Param('galleryId') galleryId: string,

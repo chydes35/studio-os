@@ -1,6 +1,8 @@
 import type {
   AddLocationPhotoDto,
   AddMediaCommentDto,
+  AuthResponse,
+  AuthUser,
   BookingStage,
   CreateAvailabilityRuleDto,
   CreateBookingDto,
@@ -13,13 +15,16 @@ import type {
   CreateInvoiceDto,
   CreateLocationDto,
   CreateQuestionnaireTemplateDto,
+  LoginDto,
   PublicBookingRequestDto,
   QuestionnaireField,
+  RegisterDto,
   SignContractDto,
   UpdateEquipmentDto,
   UpdateLocationDto,
   UploadInitResponse,
 } from "@repo/shared";
+import { clearToken, getToken } from "./auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -244,13 +249,24 @@ export type EmailLog = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init?.headers,
+    },
     cache: "no-store",
   });
   const text = await res.text();
   if (!res.ok) {
+    // A stale/expired token on an owner-only route — clear it and bounce to
+    // login rather than leaving the page stuck showing a raw error.
+    if (res.status === 401 && token) {
+      clearToken();
+      if (typeof window !== "undefined") window.location.assign("/login");
+    }
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
   }
   // Nest sends an empty body (not literal "null") for a handler that returns
@@ -274,8 +290,8 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ stage }),
     }),
-  createPublicBookingRequest: (dto: PublicBookingRequestDto) =>
-    request<Booking>("/bookings/public-request", {
+  createPublicBookingRequest: (ownerId: string, dto: PublicBookingRequestDto) =>
+    request<Booking>(`/bookings/public-request/${ownerId}`, {
       method: "POST",
       body: JSON.stringify(dto),
     }),
@@ -299,9 +315,9 @@ export const api = {
   deleteCalendarBlock: (id: string) =>
     request<{ id: string }>(`/availability/blocks/${id}`, { method: "DELETE" }),
 
-  getAvailableSlots: (date: string, durationMins: number) =>
+  getAvailableSlots: (ownerId: string, date: string, durationMins: number) =>
     request<string[]>(
-      `/availability/slots?date=${date}&durationMins=${durationMins}`,
+      `/availability/slots/${ownerId}?date=${date}&durationMins=${durationMins}`,
     ),
 
   createGallery: (bookingId: string, password: string) =>
@@ -513,4 +529,10 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ locationId }),
     }),
+
+  register: (dto: RegisterDto) =>
+    request<AuthResponse>("/auth/register", { method: "POST", body: JSON.stringify(dto) }),
+  login: (dto: LoginDto) =>
+    request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(dto) }),
+  getMe: () => request<AuthUser>("/auth/me"),
 };

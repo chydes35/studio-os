@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import type Stripe from 'stripe';
+import { Public } from '../auth/public.decorator.js';
 import { InvoicesService } from './invoices.service.js';
 import { StripeService } from './stripe.service.js';
 
@@ -23,8 +24,10 @@ export class StripeWebhookController {
    * STRIPE_WEBHOOK_SECRET exists yet, so constructWebhookEvent always throws
    * "Stripe webhook is not configured" (see StripeService). Wire this up for
    * real once Stripe credentials exist — the event-handling logic below is
-   * complete, just untestable until then.
+   * complete, just untestable until then. Public: Stripe calls this with no
+   * bearer token, its own signature (verified above) is the security boundary.
    */
+  @Public()
   @Post('webhook')
   async handleWebhook(
     @Req() req: RawBodyRequest<Request>,

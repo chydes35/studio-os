@@ -5,6 +5,7 @@ import {
   createCalendarBlockSchema,
 } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { Public } from '../auth/public.decorator.js';
 import { AvailabilityService } from './availability.service.js';
 import { SlotsService } from './slots.service.js';
 
@@ -51,11 +52,14 @@ export class AvailabilityController {
     return this.availabilityService.deleteBlock(id);
   }
 
-  @Get('slots')
+  /** Public booking portal only — the owner dashboard never calls this. */
+  @Public()
+  @Get('slots/:ownerId')
   getSlots(
+    @Param('ownerId') ownerId: string,
     @Query(new ZodValidationPipe(availableSlotsQuerySchema))
     query: ReturnType<typeof availableSlotsQuerySchema.parse>,
   ) {
-    return this.slotsService.getAvailableSlots(query.date, query.durationMins);
+    return this.slotsService.getAvailableSlots(ownerId, query.date, query.durationMins);
   }
 }

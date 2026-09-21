@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { AuthModule } from './auth/auth.module.js';
 import { AvailabilityModule } from './availability/availability.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
 import { ClientsModule } from './clients/clients.module.js';
@@ -24,6 +25,7 @@ import { StorageModule } from './storage/storage.module.js';
     ScheduleModule.forRoot(),
     DbModule,
     StorageModule,
+    AuthModule,
     OwnerModule,
     ClientsModule,
     AvailabilityModule,

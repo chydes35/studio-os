@@ -1,4 +1,6 @@
-import type { BookingStage } from "@repo/shared";
+import type { AuthResponse, AuthUser, BookingStage, LoginDto } from "@repo/shared";
+import { router } from "expo-router";
+import { clearToken, getToken } from "./auth";
 
 // EXPO_PUBLIC_* vars are inlined at bundle time, same idea as Next's
 // NEXT_PUBLIC_* — the web app's equivalent lives in apps/web/lib/api.ts.
@@ -46,12 +48,23 @@ export type Booking = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = await getToken();
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init?.headers,
+    },
   });
   const text = await res.text();
   if (!res.ok) {
+    // A stale/expired token — clear it and bounce to login rather than
+    // leaving the screen stuck on a raw error.
+    if (res.status === 401 && token) {
+      await clearToken();
+      router.replace("/login");
+    }
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
   }
   // Nest sends a genuinely empty body (not the text "null") for a handler
@@ -60,6 +73,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  login: (dto: LoginDto) =>
+    request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(dto) }),
+  getMe: () => request<AuthUser>("/auth/me"),
+
   listBookings: () => request<Booking[]>("/bookings"),
   getBooking: (id: string) => request<Booking>(`/bookings/${id}`),
   updateBookingStage: (id: string, stage: BookingStage) =>

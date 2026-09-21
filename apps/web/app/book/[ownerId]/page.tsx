@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { api } from "../../lib/api";
+import { use, useState } from "react";
+import { api } from "../../../lib/api";
 
 const DURATIONS = [30, 60, 90, 120];
 
@@ -11,7 +11,13 @@ function todayStr() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export default function BookPage() {
+export default function BookPage({
+  params,
+}: {
+  params: Promise<{ ownerId: string }>;
+}) {
+  const { ownerId } = use(params);
+
   const [shootType, setShootType] = useState("");
   const [durationMins, setDurationMins] = useState(60);
   const [date, setDate] = useState(todayStr());
@@ -30,7 +36,7 @@ export default function BookPage() {
     setSelectedSlot(null);
     setLoadingSlots(true);
     try {
-      const result = await api.getAvailableSlots(date, durationMins);
+      const result = await api.getAvailableSlots(ownerId, date, durationMins);
       setSlots(result);
     } catch (err) {
       setError(String(err));
@@ -45,7 +51,7 @@ export default function BookPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await api.createPublicBookingRequest({
+      await api.createPublicBookingRequest(ownerId, {
         clientName: contact.name,
         clientEmail: contact.email,
         clientPhone: contact.phone || undefined,

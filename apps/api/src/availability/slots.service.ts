@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { PrismaClient } from '@repo/db';
 import { PRISMA } from '../db/db.module.js';
-import { OwnerContextService } from '../owner/owner-context.service.js';
 
 interface Interval {
   start: Date;
@@ -21,13 +20,14 @@ function parseTimeOnDate(date: Date, time: string): Date {
 
 @Injectable()
 export class SlotsService {
-  constructor(
-    @Inject(PRISMA) private readonly prisma: PrismaClient,
-    private readonly ownerContext: OwnerContextService,
-  ) {}
+  constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
-  async getAvailableSlots(dateStr: string, durationMins: number) {
-    const ownerId = await this.ownerContext.getOwnerId();
+  /**
+   * Only ever called from the public booking portal (no logged-in owner on
+   * that request), so `ownerId` is an explicit parameter resolved by the
+   * caller from the portal's URL, not from OwnerContextService.
+   */
+  async getAvailableSlots(ownerId: string, dateStr: string, durationMins: number) {
     const date = new Date(`${dateStr}T00:00:00`);
     const dayOfWeek = date.getDay();
     const dayStart = new Date(date);

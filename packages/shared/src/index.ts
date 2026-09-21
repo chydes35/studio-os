@@ -259,3 +259,32 @@ export const setBookingLocationSchema = z.object({
   locationId: z.string().min(1).nullable(),
 });
 export type SetBookingLocationDto = z.infer<typeof setBookingLocationSchema>;
+
+// ---------- Auth (Phase 9) ----------
+
+export const registerSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+export type RegisterDto = z.infer<typeof registerSchema>;
+
+export const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+export type LoginDto = z.infer<typeof loginSchema>;
+
+export const authUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  role: z.enum(["OWNER", "STAFF"]),
+});
+export type AuthUser = z.infer<typeof authUserSchema>;
+
+export const authResponseSchema = z.object({
+  accessToken: z.string(),
+  user: authUserSchema,
+});
+export type AuthResponse = z.infer<typeof authResponseSchema>;

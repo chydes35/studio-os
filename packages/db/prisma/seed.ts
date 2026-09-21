@@ -2,13 +2,21 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+// bcrypt hash of "devpassword123" (cost 10) — the documented dev login for
+// the seeded owner (see README's Setup section). Hardcoded rather than
+// hashed at seed time so this file doesn't need bcryptjs as a dependency
+// just for this one value.
+const DEV_OWNER_PASSWORD_HASH =
+  "$2a$10$ZggCxp.ERkOyv2djqPhR8Oar4olKqX6p6uBlfwWeXyfUa9HMG.tli";
+
 async function main() {
   const owner = await prisma.user.upsert({
     where: { email: "owner@studio-os.dev" },
-    update: {},
+    update: { passwordHash: DEV_OWNER_PASSWORD_HASH },
     create: {
       email: "owner@studio-os.dev",
       name: "Studio Owner",
+      passwordHash: DEV_OWNER_PASSWORD_HASH,
       role: "OWNER",
     },
   });

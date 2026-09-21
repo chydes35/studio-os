@@ -1,6 +1,7 @@
 import { Controller, Param, Post, Body } from '@nestjs/common';
 import { addMediaCommentSchema, toggleFavoriteSchema, uploadInitSchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { Public } from '../auth/public.decorator.js';
 import { MediaService } from './media.service.js';
 
 @Controller('media')
@@ -20,6 +21,7 @@ export class MediaController {
     return this.mediaService.completeUpload(id);
   }
 
+  @Public()
   @Post(':id/favorite')
   toggleFavorite(
     @Param('id') id: string,
@@ -29,6 +31,7 @@ export class MediaController {
     return this.mediaService.toggleFavorite(id, body.password);
   }
 
+  @Public()
   @Post(':id/comments')
   addComment(
     @Param('id') id: string,

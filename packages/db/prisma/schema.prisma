@@ -49,6 +49,7 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   name         String
+  passwordHash String
   role         Role     @default(OWNER)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { createInvoiceSchema, markInvoicePaidSchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { Public } from '../auth/public.decorator.js';
 import { InvoicesService } from './invoices.service.js';
 
 @Controller()
@@ -35,11 +36,13 @@ export class InvoicesController {
     return this.invoicesService.markPaid(id, body.amountCents);
   }
 
+  @Public()
   @Get('invoices/:id')
   getPublicView(@Param('id') id: string) {
     return this.invoicesService.getPublicView(id);
   }
 
+  @Public()
   @Post('invoices/:id/checkout')
   createCheckoutSession(@Param('id') id: string) {
     return this.invoicesService.createCheckoutSession(id);

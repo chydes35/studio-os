@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import Link from "next/link";
 import "./globals.css";
+import { AuthGate } from "../components/AuthGate";
+import { NavBar } from "../components/NavBar";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -28,75 +29,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <div className="flex min-h-screen flex-col">
-          <header className="border-b border-slate-200 bg-white">
-            <nav className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3 sm:px-6">
-              <Link href="/" className="text-sm font-semibold tracking-tight">
-                Studio OS
-              </Link>
-              <Link
-                href="/clients"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
-                Clients
-              </Link>
-              <Link
-                href="/bookings"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
-                Bookings
-              </Link>
-              <Link
-                href="/availability"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
-                Availability
-              </Link>
-              <Link
-                href="/contracts/templates"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
-                Contract templates
-              </Link>
-              <Link
-                href="/expenses"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
-                Expenses
-              </Link>
-              <Link
-                href="/questionnaires/templates"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
-                Questionnaires
-              </Link>
-              <Link
-                href="/notifications"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
-                Notifications
-              </Link>
-              <Link
-                href="/equipment"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
-                Equipment
-              </Link>
-              <Link
-                href="/locations"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
-                Locations
-              </Link>
-              <Link
-                href="/book"
-                className="ml-auto text-sm text-slate-400 hover:text-slate-600"
-              >
-                Public booking page ↗
-              </Link>
-            </nav>
-          </header>
+          <NavBar />
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
-            {children}
+            <AuthGate>{children}</AuthGate>
           </main>
         </div>
       </body>
