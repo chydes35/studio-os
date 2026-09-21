@@ -5,9 +5,10 @@ Business management and client portal platform for photographers and videographe
 ## Structure
 
 - `apps/web` — Next.js (owner dashboard + public booking/gallery pages, client)
-- `apps/api` — NestJS (REST API; the single backend the web app and, later, a mobile app both talk to)
+- `apps/api` — NestJS (REST API; the single backend the web app and the mobile app both talk to)
+- `apps/mobile` — Expo/React Native (owner's on-the-go companion app — bookings + clients; see Phase 8 below)
 - `packages/db` — Prisma schema + client, shared by `apps/api`
-- `packages/shared` — Zod schemas / DTOs shared between `apps/web` and `apps/api`
+- `packages/shared` — Zod schemas / DTOs shared between `apps/web`, `apps/api`, and `apps/mobile`
 - `packages/ui` — shared React components
 - `packages/eslint-config`, `packages/typescript-config` — shared tooling config
 
@@ -40,7 +41,7 @@ npm run --workspace=@repo/db migrate:dev
 npm run --workspace=@repo/db seed   # creates a dev owner + sample clients/bookings
 ```
 
-`.env` is symlinked into `packages/db/.env`, `apps/api/.env`, and `apps/web/.env.local` so every workspace package/app picks up the same values regardless of its own cwd.
+`.env` is symlinked into `packages/db/.env`, `apps/api/.env`, `apps/web/.env.local`, and `apps/mobile/.env` so every workspace package/app picks up the same values regardless of its own cwd.
 
 ## Develop
 
@@ -100,10 +101,18 @@ Visit `/clients` to add clients, `/bookings` for the Kanban pipeline (drag cards
 - **Location reference photos are private, not public** — unlike gallery previews (whose R2/MinIO prefix is public-read so clients can view them unauthenticated), location photos are the owner's own scouting reference material, so they're served through `StorageService.getPresignedGetUrl()` (same pattern as contract PDFs) rather than `publicUrl()`. This was caught by an actual `ERR_BLOCKED_BY_ORB` in browser testing — the first implementation used `publicUrl()` and MinIO correctly 403'd it, since only the `previews/*` prefix has a public-read bucket policy.
 - **A booking can be linked to one saved location** via the pre-existing `Booking.locationId` — `PATCH /bookings/:id/location` (`BookingLocationSection` on `/bookings/[id]`) sets or clears it from a dropdown of saved locations.
 
+## Mobile app (Phase 8)
+
+- **`apps/mobile` is a real Expo Router app, not a shell** — it talks to the exact same NestJS API as the web dashboard, the reason the backend was built as a separate service in the first place (see "Why a separate API" below). It shares `@repo/shared`'s Zod-derived types (e.g. `BookingStage`) with web and api; its own `src/lib/api.ts` is a thin fetch wrapper mirroring `apps/web/lib/api.ts`'s pattern (including the same empty-body-safe `request()` helper), covering just the subset of endpoints this app's screens use.
+- **Scope is deliberately a focused subset, not full feature parity**: a Bookings tab (list sorted by `scheduledAt`, tap into a detail screen with client contact, shoot info, a stage picker that calls the existing `PATCH /bookings/:id/stage`, read-only location + assigned-equipment info) and a Clients tab (list with tap-to-email/call). Galleries, contracts, invoicing, and questionnaires remain web-only for now — nothing about the architecture prevents adding mobile screens for those later, they just weren't built this phase.
+- **No native map SDK, no Google/Apple Maps API key** — the location section deep-links to whichever maps app the OS already has (`https://maps.apple.com/?ll=...` on iOS, `geo:...` on Android, a Google Maps search URL on web) via `Linking.openURL`, rather than embedding `react-native-maps`. This needs zero configuration and works identically whether or not Mux/Stripe/Maps credentials ever get added.
+- **This session's Mac only had Xcode Command Line Tools, not full Xcode**, so the iOS Simulator couldn't be used to visually verify the app (that needs a full Xcode install + `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, which needs interactive `sudo`). Verified instead via `npx expo export -p web` (confirms the whole app type-checks and bundles) and `npx expo start --web` opened in a real browser — Expo Router's web target (`react-native-web`) renders the actual screens and hits the actual API, so this is real functional verification, not a stub check, it just isn't the native iOS renderer. A real device/simulator run is still worth doing once Xcode is available; nothing in the code is web-only.
+- **`useFocusEffect` (from `expo-router`), not `useEffect`, drives the two list screens' data loading** — a plain mount-only `useEffect` left the Bookings list showing a stale stage after editing it on the detail screen and navigating back, since tab screens aren't remounted on every visit. Pass a `useCallback`-wrapped, non-async closure to `useFocusEffect`, not the raw async `load` function — `useFocusEffect` inspects its callback's return value and logs a dev warning if it's ever handed a Promise instead of `undefined` or a cleanup function.
+
 ## Auth
 
 Phase 1 has no auth yet — every owned record resolves to a single seeded "OWNER" user via `OwnerContextService` (`apps/api/src/owner/owner-context.service.ts`). This gets replaced with real request-scoped auth in a later phase; don't build multi-tenant assumptions on top of it yet.
 
 ## Why a separate API instead of Next.js API routes
 
-`apps/api` is a standalone NestJS service with its own deploy and a documented contract. When the React Native/Expo mobile app is built in Phase 2, it becomes just another client of the same API — no backend rework, same `packages/shared` DTOs for request/response validation.
+`apps/api` is a standalone NestJS service with its own deploy and a documented contract. This is what let the Phase 8 Expo mobile app become just another client of the same API with zero backend rework — same `packages/shared` DTOs for request/response validation, same endpoints, same `OwnerContextService`.
