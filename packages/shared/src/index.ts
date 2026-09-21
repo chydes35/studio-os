@@ -262,10 +262,31 @@ export type SetBookingLocationDto = z.infer<typeof setBookingLocationSchema>;
 
 // ---------- Auth (Phase 9) ----------
 
+/** True for any IANA zone name the runtime's Intl knows (e.g. "America/Chicago"). */
+export function isValidTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The studio's own time zone. Availability rules ("Mon 09:00-17:00") are
+ * wall-clock times in this zone — never the API server's zone, which is
+ * typically UTC in production.
+ */
+export const timeZoneSchema = z
+  .string()
+  .min(1)
+  .refine(isValidTimeZone, { message: "Unknown time zone" });
+
 export const registerSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(8),
+  timezone: timeZoneSchema.optional(),
 });
 export type RegisterDto = z.infer<typeof registerSchema>;
 
@@ -280,8 +301,20 @@ export const authUserSchema = z.object({
   name: z.string(),
   email: z.string(),
   role: z.enum(["OWNER", "STAFF"]),
+  timezone: z.string(),
 });
 export type AuthUser = z.infer<typeof authUserSchema>;
+
+export const updateProfileSchema = z.object({
+  timezone: timeZoneSchema,
+});
+export type UpdateProfileDto = z.infer<typeof updateProfileSchema>;
+
+/** Public booking portal: slot start times (ISO UTC) plus the studio zone to display them in. */
+export type AvailableSlotsResponse = {
+  timezone: string;
+  slots: string[];
+};
 
 export const authResponseSchema = z.object({
   accessToken: z.string(),

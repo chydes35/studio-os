@@ -2,10 +2,20 @@ import { ConflictException, Inject, Injectable, UnauthorizedException } from '@n
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
 import type { PrismaClient, User } from '@repo/db';
-import type { AuthResponse, LoginDto, RegisterDto } from '@repo/shared';
+import type { AuthResponse, AuthUser, LoginDto, RegisterDto } from '@repo/shared';
 import { PRISMA } from '../db/db.module.js';
 
 const BCRYPT_ROUNDS = 10;
+
+export function toAuthUser(user: User): AuthUser {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    timezone: user.timezone,
+  };
+}
 
 @Injectable()
 export class AuthService {
@@ -25,7 +35,14 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
     const user = await this.prisma.user.create({
-      data: { name: dto.name, email: dto.email, passwordHash, role: 'OWNER' },
+      data: {
+        name: dto.name,
+        email: dto.email,
+        passwordHash,
+        role: 'OWNER',
+        // Falls back to the column default ('UTC') if the client didn't send one.
+        timezone: dto.timezone,
+      },
     });
 
     return this.buildAuthResponse(user);
@@ -49,7 +66,7 @@ export class AuthService {
     });
     return {
       accessToken,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: toAuthUser(user),
     };
   }
 }

@@ -22,6 +22,7 @@ export default function BookPage({
   const [durationMins, setDurationMins] = useState(60);
   const [date, setDate] = useState(todayStr());
   const [slots, setSlots] = useState<string[] | null>(null);
+  const [studioTimeZone, setStudioTimeZone] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +38,8 @@ export default function BookPage({
     setLoadingSlots(true);
     try {
       const result = await api.getAvailableSlots(ownerId, date, durationMins);
-      setSlots(result);
+      setSlots(result.slots);
+      setStudioTimeZone(result.timezone);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -126,6 +128,11 @@ export default function BookPage({
           <h2 className="mb-2 text-sm font-semibold text-slate-700">
             Available times on {date}
           </h2>
+          {studioTimeZone && (
+            <p className="mb-2 text-xs text-slate-500">
+              Times shown in the studio&apos;s time zone ({studioTimeZone.replace(/_/g, " ")}).
+            </p>
+          )}
           {slots.length === 0 ? (
             <p className="text-sm text-slate-500">
               No openings that day — try another date.
@@ -145,6 +152,7 @@ export default function BookPage({
                   {new Date(s).toLocaleTimeString([], {
                     hour: "numeric",
                     minute: "2-digit",
+                    timeZone: studioTimeZone ?? undefined,
                   })}
                 </button>
               ))}
