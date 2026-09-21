@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { PrismaClient } from '@repo/db';
 import { PRISMA } from '../db/db.module.js';
+import { formatDateOnly, formatDateTime, html, plainSubject } from './email-html.js';
 import { EmailService } from './email.service.js';
 
 const REMINDER_DAYS_BEFORE = 3;
@@ -58,7 +59,7 @@ export class NotificationsService {
         scheduledAt: { gte: windowStart, lt: windowEnd },
         stage: { notIn: ['CLOSED'] },
       },
-      include: { client: true },
+      include: { client: true, owner: true },
     });
 
     let count = 0;
@@ -68,9 +69,11 @@ export class NotificationsService {
       });
       if (alreadySent) continue;
 
-      const subject = `Reminder: your ${booking.shootType} shoot is in ${REMINDER_DAYS_BEFORE} days`;
-      const html = `<p>Hi ${booking.client.name},</p><p>Just a reminder that your ${booking.shootType} session is scheduled for ${booking.scheduledAt?.toLocaleString()}. Looking forward to it!</p>`;
-      const result = await this.email.send({ to: booking.client.email, subject, html });
+      const subject = plainSubject(
+        `Reminder: your ${booking.shootType} shoot is in ${REMINDER_DAYS_BEFORE} days`,
+      );
+      const body = html`<p>Hi ${booking.client.name},</p><p>Just a reminder that your ${booking.shootType} session is scheduled for ${booking.scheduledAt ? formatDateTime(booking.scheduledAt, booking.owner.timezone) : 'the scheduled time'}. Looking forward to it!</p>`;
+      const result = await this.email.send({ to: booking.client.email, subject, html: body });
 
       await this.prisma.emailLog.create({
         data: {
@@ -79,7 +82,7 @@ export class NotificationsService {
           type: 'shoot_reminder',
           recipientEmail: booking.client.email,
           subject,
-          body: html,
+          body,
           status: result.delivered ? 'sent' : 'skipped_not_configured',
         },
       });
@@ -118,11 +121,11 @@ export class NotificationsService {
       if (recentReminder) continue;
 
       const subject = 'Invoice past due';
-      const html = `<p>Hi ${invoice.booking.client.name},</p><p>This is a reminder that your invoice${invoice.dueAt ? ` (due ${invoice.dueAt.toLocaleDateString()})` : ''} is now past due. Please arrange payment at your earliest convenience.</p>`;
+      const body = html`<p>Hi ${invoice.booking.client.name},</p><p>This is a reminder that your invoice${invoice.dueAt ? ` (due ${formatDateOnly(invoice.dueAt)})` : ''} is now past due. Please arrange payment at your earliest convenience.</p>`;
       const result = await this.email.send({
         to: invoice.booking.client.email,
         subject,
-        html,
+        html: body,
       });
 
       await this.prisma.emailLog.create({
@@ -132,7 +135,7 @@ export class NotificationsService {
           type: 'invoice_overdue',
           recipientEmail: invoice.booking.client.email,
           subject,
-          body: html,
+          body,
           status: result.delivered ? 'sent' : 'skipped_not_configured',
         },
       });
@@ -166,13 +169,13 @@ export class NotificationsService {
       if (alreadyAlerted) continue;
 
       const overdue = item.nextServiceDue! < new Date();
-      const subject = `${overdue ? 'Overdue' : 'Upcoming'} service: ${item.name}`;
-      const html = `<p>${item.name}${item.serialNumber ? ` (S/N ${item.serialNumber})` : ''} is ${
+      const subject = plainSubject(`${overdue ? 'Overdue' : 'Upcoming'} service: ${item.name}`);
+      const body = html`<p>${item.name}${item.serialNumber ? ` (S/N ${item.serialNumber})` : ''} is ${
         overdue
           ? 'overdue for service'
-          : `due for service on ${item.nextServiceDue!.toLocaleDateString()}`
+          : `due for service on ${formatDateOnly(item.nextServiceDue!)}`
       }.</p>`;
-      const result = await this.email.send({ to: item.owner.email, subject, html });
+      const result = await this.email.send({ to: item.owner.email, subject, html: body });
 
       await this.prisma.emailLog.create({
         data: {
@@ -181,7 +184,7 @@ export class NotificationsService {
           type: 'equipment_service_due',
           recipientEmail: item.owner.email,
           subject,
-          body: html,
+          body,
           status: result.delivered ? 'sent' : 'skipped_not_configured',
         },
       });

@@ -3,6 +3,8 @@ import { assignQuestionnaireSchema, submitQuestionnaireSchema } from '@repo/shar
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
 import { QuestionnairesService } from './questionnaires.service.js';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../rate-limit/rate-limit.module.js';
 
 @Controller()
 export class QuestionnairesController {
@@ -29,6 +31,7 @@ export class QuestionnairesController {
   }
 
   @Public()
+  @Throttle({ default: RATE_LIMITS.publicSubmit })
   @Post('questionnaire-responses/:id/submit')
   submit(
     @Param('id') id: string,

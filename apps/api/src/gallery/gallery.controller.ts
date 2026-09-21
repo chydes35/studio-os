@@ -3,6 +3,8 @@ import { createGallerySchema, unlockGallerySchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
 import { GalleryService } from './gallery.service.js';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../rate-limit/rate-limit.module.js';
 
 @Controller()
 export class GalleryController {
@@ -23,6 +25,7 @@ export class GalleryController {
   }
 
   @Public()
+  @Throttle({ default: RATE_LIMITS.galleryPassword })
   @Post('gallery/:galleryId/view')
   viewGallery(
     @Param('galleryId') galleryId: string,

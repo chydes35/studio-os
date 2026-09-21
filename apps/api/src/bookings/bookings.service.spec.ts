@@ -72,3 +72,78 @@ describe('ExpensesService.create — tenant isolation', () => {
     expect(prisma.expense.create).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('BookingsService.createPublicRequest — existing client records', () => {
+  const SLOT = new Date('2026-09-28T15:00:00.000Z');
+  const EXISTING = {
+    id: 'client_existing',
+    ownerId: OWNER,
+    email: 'avery@example.com',
+    name: 'Avery Chen',
+    phone: null as string | null,
+  };
+
+  function setup(existing: typeof EXISTING | null) {
+    const tx = {
+      $executeRaw: vi.fn(async () => 0),
+      client: {
+        findUnique: vi.fn(async () => existing),
+        create: vi.fn(async ({ data }) => ({ id: 'client_new', ...data })),
+        update: vi.fn(async ({ data }) => ({ ...existing, ...data })),
+      },
+      booking: { create: vi.fn(async ({ data }) => ({ id: 'booking_new', ...data })) },
+    };
+    const prisma = {
+      user: { findUnique: async () => ({ id: OWNER, timezone: 'UTC' }) },
+      $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx),
+    };
+    const slots = {
+      getAvailableSlots: async () => ({ timezone: 'UTC', slots: [SLOT.toISOString()] }),
+    } as unknown as SlotsService;
+    const service = new BookingsService(prisma as unknown as PrismaClient, ownerContext, slots);
+    return { tx, service };
+  }
+
+  const request = (overrides: Record<string, unknown> = {}) => ({
+    clientName: 'Avery Chen',
+    clientEmail: 'avery@example.com',
+    shootType: 'Portrait',
+    scheduledAt: SLOT,
+    durationMins: 60,
+    ...overrides,
+  });
+
+  it('creates a new client when the email is unknown', async () => {
+    const { tx, service } = setup(null);
+    await service.createPublicRequest(OWNER, request({ clientPhone: '555-0100' }));
+    expect(tx.client.create).toHaveBeenCalledOnce();
+    expect(tx.booking.create.mock.calls[0]![0].data.clientId).toBe('client_new');
+  });
+
+  it("never renames an existing client, and notes the submitted name on the booking", async () => {
+    const { tx, service } = setup({ ...EXISTING, phone: '555-0100' });
+    await service.createPublicRequest(
+      OWNER,
+      request({ clientName: 'Someone Else', clientPhone: '555-9999', notes: 'hi' }),
+    );
+
+    expect(tx.client.update).not.toHaveBeenCalled();
+    expect(tx.client.create).not.toHaveBeenCalled();
+    const { data } = tx.booking.create.mock.calls[0]![0];
+    expect(data.clientId).toBe('client_existing');
+    expect(data.notes).toContain('name "Someone Else"');
+    expect(data.notes).toContain('phone "555-9999"');
+    expect(data.notes).toMatch(/hi$/);
+  });
+
+  it('fills in a missing phone number without touching the name', async () => {
+    const { tx, service } = setup(EXISTING);
+    await service.createPublicRequest(OWNER, request({ clientPhone: '555-0100' }));
+
+    expect(tx.client.update).toHaveBeenCalledWith({
+      where: { id: 'client_existing' },
+      data: { phone: '555-0100' },
+    });
+    expect(tx.booking.create.mock.calls[0]![0].data.notes).toBeUndefined();
+  });
+});

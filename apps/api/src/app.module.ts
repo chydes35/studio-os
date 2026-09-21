@@ -17,12 +17,15 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { OwnerModule } from './owner/owner.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { QuestionnairesModule } from './questionnaires/questionnaires.module.js';
+import { RateLimitModule } from './rate-limit/rate-limit.module.js';
 import { StorageModule } from './storage/storage.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+    // Before AuthModule so its guard runs first: rejected logins still count.
+    RateLimitModule,
     DbModule,
     StorageModule,
     AuthModule,
