@@ -140,6 +140,17 @@ export const addMediaCommentSchema = z.object({
 });
 export type AddMediaCommentDto = z.infer<typeof addMediaCommentSchema>;
 
+/** Clients re-send the gallery password with each action; there is no session. */
+export const downloadMediaSchema = z.object({
+  password: z.string().min(1),
+});
+export type DownloadMediaDto = z.infer<typeof downloadMediaSchema>;
+
+export const setGalleryDownloadsSchema = z.object({
+  enabled: z.boolean(),
+});
+export type SetGalleryDownloadsDto = z.infer<typeof setGalleryDownloadsSchema>;
+
 export const toggleFavoriteSchema = z.object({
   password: z.string().min(1),
 });

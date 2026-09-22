@@ -131,11 +131,14 @@ export type Media = {
   muxPlaybackId: string | null;
   createdAt: string;
   comments?: MediaComment[];
+  /** Client view only: the owner has released originals and this file has one. */
+  canDownload?: boolean;
 };
 
 export type Gallery = {
   id: string;
   bookingId: string;
+  downloadsEnabled?: boolean;
   media: Media[];
 };
 
@@ -329,6 +332,16 @@ export const api = {
     }),
   getGalleryForBooking: (bookingId: string) =>
     request<Gallery | null>(`/bookings/${bookingId}/gallery`),
+  setGalleryDownloads: (galleryId: string, enabled: boolean) =>
+    request<{ id: string; downloadsEnabled: boolean }>(`/gallery/${galleryId}/downloads`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    }),
+  getMediaDownloadUrl: (mediaId: string, password: string) =>
+    request<{ url: string; fileName: string; sizeBytes: number | null }>(
+      `/media/${mediaId}/download`,
+      { method: "POST", body: JSON.stringify({ password }) },
+    ),
   viewGallery: (galleryId: string, password: string) =>
     request<Gallery>(`/gallery/${galleryId}/view`, {
       method: "POST",

@@ -18,6 +18,23 @@ export function GalleryLightbox({
   const [commentBody, setCommentBody] = useState("");
   const [comments, setComments] = useState(media.comments ?? []);
   const [submitting, setSubmitting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  async function handleDownload() {
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      // The link points straight at storage, so the file never passes through
+      // the app server. It is short-lived, hence fetching it on click.
+      const { url } = await api.getMediaDownloadUrl(media.id, password);
+      window.location.assign(url);
+    } catch {
+      setDownloadError("That download link could not be created. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function handleFavorite() {
     const updated = await api.toggleFavorite(media.id, password);
@@ -59,17 +76,29 @@ export function GalleryLightbox({
             className="w-full select-none rounded"
           />
         )}
-        <div className="mt-3 flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between gap-3">
           <button
             onClick={handleFavorite}
             className={`text-sm ${media.isFavorited ? "text-red-600" : "text-slate-500"}`}
           >
             {media.isFavorited ? "♥ Favorited" : "♡ Favorite"}
           </button>
-          <button onClick={onClose} className="text-sm text-slate-500">
-            Close
-          </button>
+          <div className="flex items-center gap-3">
+            {media.canDownload && (
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {downloading ? "Preparing…" : "Download original"}
+              </button>
+            )}
+            <button onClick={onClose} className="text-sm text-slate-500">
+              Close
+            </button>
+          </div>
         </div>
+        {downloadError && <p className="mt-2 text-xs text-red-600">{downloadError}</p>}
 
         <div className="mt-4 space-y-2">
           <h3 className="text-sm font-semibold">Comments</h3>

@@ -1,5 +1,10 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { createGallerySchema, unlockGallerySchema } from '@repo/shared';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  createGallerySchema,
+  downloadMediaSchema,
+  setGalleryDownloadsSchema,
+  unlockGallerySchema,
+} from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
 import { GalleryService } from './gallery.service.js';
@@ -22,6 +27,28 @@ export class GalleryController {
   @Get('bookings/:bookingId/gallery')
   getForBooking(@Param('bookingId') bookingId: string) {
     return this.galleryService.getForBookingOwnerView(bookingId);
+  }
+
+  /** Owner releases (or re-hides) full-resolution downloads for a gallery. */
+  @Patch('gallery/:galleryId/downloads')
+  setDownloads(
+    @Param('galleryId') galleryId: string,
+    @Body(new ZodValidationPipe(setGalleryDownloadsSchema))
+    body: ReturnType<typeof setGalleryDownloadsSchema.parse>,
+  ) {
+    return this.galleryService.setDownloadsEnabled(galleryId, body.enabled);
+  }
+
+  /** Client-facing: mints a short-lived link to the original file. */
+  @Public()
+  @Throttle({ default: RATE_LIMITS.galleryAction })
+  @Post('media/:mediaId/download')
+  getDownloadUrl(
+    @Param('mediaId') mediaId: string,
+    @Body(new ZodValidationPipe(downloadMediaSchema))
+    body: ReturnType<typeof downloadMediaSchema.parse>,
+  ) {
+    return this.galleryService.getDownloadUrl(mediaId, body.password);
   }
 
   @Public()
