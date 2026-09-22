@@ -45,11 +45,6 @@ describe('PdfService', () => {
     expect(parsed.getPageCount()).toBeGreaterThan(1);
   });
 
-  // Regression guard for a bug that only showed up in a rendered page:
-  // `embedFont(..., { subset: true })` dropped most glyphs, so contracts
-  // rendered as fragments while still parsing as valid PDFs. Subset fonts
-  // are tagged with a six-letter prefix ("ABCDEF+NotoSans"), so the absence
-  // of that prefix is what proves the whole face is embedded.
   // Regression guard for a bug that only appeared in a *rendered* page:
   // `embedFont(..., { subset: true })` dropped most glyphs, so a contract
   // rendered as fragments ("Client Nguyen" as "C e Ng") while still parsing
