@@ -18,6 +18,7 @@ export default function BookingDetailPage({
   const [booking, setBooking] = useState<Booking | null>(null);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [savingDownloads, setSavingDownloads] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +49,20 @@ export default function BookingDetailPage({
       setPasswordInput("");
     } catch (err) {
       setError(String(err));
+    }
+  }
+
+  async function handleDownloadOriginal(mediaId: string) {
+    setDownloadingId(mediaId);
+    setError(null);
+    try {
+      // Short-lived link straight to storage, so fetch it at click time.
+      const { url } = await api.getOwnerMediaDownloadUrl(mediaId);
+      window.location.assign(url);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setDownloadingId(null);
     }
   }
 
@@ -203,9 +218,18 @@ export default function BookingDetailPage({
                       {m.processingStatus === "pending" ? "Processing…" : "Failed"}
                     </div>
                   )}
-                  <div className="p-1.5 text-xs text-slate-500">
-                    {m.isFavorited && "♥ "}
-                    {m.comments?.length ? `${m.comments.length} comment(s)` : ""}
+                  <div className="flex items-center justify-between gap-1 p-1.5 text-xs text-slate-500">
+                    <span className="truncate">
+                      {m.isFavorited && "♥ "}
+                      {m.comments?.length ? `${m.comments.length} comment(s)` : ""}
+                    </span>
+                    <button
+                      onClick={() => handleDownloadOriginal(m.id)}
+                      disabled={downloadingId === m.id}
+                      className="shrink-0 text-slate-600 underline disabled:opacity-50"
+                    >
+                      {downloadingId === m.id ? "…" : "Download"}
+                    </button>
                   </div>
                 </div>
               ))}

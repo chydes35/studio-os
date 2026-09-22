@@ -113,6 +113,35 @@ export class MediaService {
     return { ...updated, previewUrl: this.storage.publicUrl(previewKey) };
   }
 
+  /**
+   * Owner's own copy of a file they uploaded. Unlike the client-facing
+   * download this ignores Gallery.downloadsEnabled — that switch exists to
+   * withhold finals from the *client*, not from the studio — but it still
+   * goes through a presigned URL so the bytes never pass through the API.
+   * Works even when watermarking failed, which is when it is most needed.
+   */
+  async getOwnerDownloadUrl(mediaId: string) {
+    const ownerId = await this.ownerContext.getOwnerId();
+    const media = await this.prisma.media.findUnique({
+      where: { id: mediaId },
+      include: { gallery: { include: { booking: true } } },
+    });
+    if (!media || media.gallery.booking.ownerId !== ownerId) {
+      throw new NotFoundException('Media not found');
+    }
+    if (!media.r2Key) {
+      // Mux-hosted video has no object of ours to hand back.
+      throw new NotFoundException('This file has no stored original to download');
+    }
+
+    const fileName = media.fileName ?? `${media.id}.jpg`;
+    const [url, sizeBytes] = await Promise.all([
+      this.storage.getPresignedDownloadUrl(media.r2Key, fileName),
+      this.storage.getObjectSize(media.r2Key),
+    ]);
+    return { url, fileName, sizeBytes };
+  }
+
   async toggleFavorite(mediaId: string, password: string) {
     const media = await this.galleryService.verifyMediaGalleryPassword(mediaId, password);
     return this.prisma.media.update({
