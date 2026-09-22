@@ -1,4 +1,4 @@
-import { Controller, Param, Post, Body } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body } from '@nestjs/common';
 import { addMediaCommentSchema, toggleFavoriteSchema, uploadInitSchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
@@ -21,6 +21,12 @@ export class MediaController {
   @Post(':id/complete')
   completeUpload(@Param('id') id: string) {
     return this.mediaService.completeUpload(id);
+  }
+
+  /** Owner downloading their own original; no gallery password involved. */
+  @Get(':id/original')
+  getOwnerDownloadUrl(@Param('id') id: string) {
+    return this.mediaService.getOwnerDownloadUrl(id);
   }
 
   @Public()

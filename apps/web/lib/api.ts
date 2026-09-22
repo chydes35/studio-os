@@ -337,6 +337,11 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ enabled }),
     }),
+  /** Owner's own copy; no gallery password, and not gated by the client release switch. */
+  getOwnerMediaDownloadUrl: (mediaId: string) =>
+    request<{ url: string; fileName: string; sizeBytes: number | null }>(
+      `/media/${mediaId}/original`,
+    ),
   getMediaDownloadUrl: (mediaId: string, password: string) =>
     request<{ url: string; fileName: string; sizeBytes: number | null }>(
       `/media/${mediaId}/download`,
