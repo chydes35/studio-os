@@ -2,6 +2,7 @@ import { Body, Controller, Get, Inject, Patch, Post, Req, UnauthorizedException 
 import type { Request } from 'express';
 import type { PrismaClient } from '@repo/db';
 import {
+  changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
@@ -70,6 +71,25 @@ export class AuthController {
     const user = await this.prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user) throw new UnauthorizedException();
     return toAuthUser(user);
+  }
+
+  /** Signed-in password change; returns a fresh token for this device. */
+  @Throttle({ default: RATE_LIMITS.login })
+  @Post('change-password')
+  async changePassword(
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(changePasswordSchema))
+    body: ReturnType<typeof changePasswordSchema.parse>,
+  ) {
+    if (!req.user) throw new UnauthorizedException();
+    return this.authService.changePassword(req.user.id, body);
+  }
+
+  /** Ends every session for this account, this device included. */
+  @Post('sign-out-everywhere')
+  async signOutEverywhere(@Req() req: Request) {
+    if (!req.user) throw new UnauthorizedException();
+    return this.authService.signOutEverywhere(req.user.id);
   }
 
   /** Owner's own settings — currently just the studio time zone used for availability. */

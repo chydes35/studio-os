@@ -67,11 +67,11 @@ export class JwtAuthGuard implements CanActivate {
     // what makes a password reset end sessions someone else may be holding.
     const user = await this.prisma.user.findUnique({
       where: { id: payload.id },
-      select: { passwordChangedAt: true },
+      select: { sessionsValidFrom: true },
     });
     if (!user) throw new UnauthorizedException('Account no longer exists');
 
-    const changedAtSeconds = Math.floor(user.passwordChangedAt.getTime() / 1000);
+    const changedAtSeconds = Math.floor(user.sessionsValidFrom.getTime() / 1000);
     // `iat` is whole seconds, so a token minted in the same second as the
     // change (logging straight back in) must still count as newer.
     if (payload.iat !== undefined && changedAtSeconds > payload.iat) {

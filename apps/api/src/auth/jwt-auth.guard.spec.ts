@@ -15,7 +15,7 @@ function contextWithToken(token?: string): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-function setup(options: { iat: number; passwordChangedAt: Date | null; isPublic?: boolean }) {
+function setup(options: { iat: number; sessionsValidFrom: Date | null; isPublic?: boolean }) {
   const reflector = { getAllAndOverride: () => options.isPublic ?? false } as unknown as Reflector;
   const jwt = {
     verifyAsync: async () => ({ id: 'user_1', email: 'a@b.c', role: 'OWNER', iat: options.iat }),
@@ -23,7 +23,7 @@ function setup(options: { iat: number; passwordChangedAt: Date | null; isPublic?
   const prisma = {
     user: {
       findUnique: vi.fn(async () =>
-        options.passwordChangedAt ? { passwordChangedAt: options.passwordChangedAt } : null,
+        options.sessionsValidFrom ? { sessionsValidFrom: options.sessionsValidFrom } : null,
       ),
     },
   };
@@ -34,30 +34,30 @@ describe('JwtAuthGuard password-change check', () => {
   const now = new Date('2026-09-22T12:00:00Z');
 
   it('accepts a token issued after the last password change', async () => {
-    const guard = setup({ iat: SECONDS(now) + 60, passwordChangedAt: now });
+    const guard = setup({ iat: SECONDS(now) + 60, sessionsValidFrom: now });
     await expect(guard.canActivate(contextWithToken('t'))).resolves.toBe(true);
   });
 
   // The point of the whole feature: a reset ends sessions someone else holds.
   it('rejects a token issued before the password changed', async () => {
-    const guard = setup({ iat: SECONDS(now) - 60, passwordChangedAt: now });
+    const guard = setup({ iat: SECONDS(now) - 60, sessionsValidFrom: now });
     await expect(guard.canActivate(contextWithToken('t'))).rejects.toThrow(UnauthorizedException);
   });
 
   // Signing in immediately after a reset mints a token in the same whole
   // second as the change; that must not be treated as stale.
   it('accepts a token minted in the same second as the change', async () => {
-    const guard = setup({ iat: SECONDS(now), passwordChangedAt: now });
+    const guard = setup({ iat: SECONDS(now), sessionsValidFrom: now });
     await expect(guard.canActivate(contextWithToken('t'))).resolves.toBe(true);
   });
 
   it('rejects a token whose account no longer exists', async () => {
-    const guard = setup({ iat: SECONDS(now), passwordChangedAt: null });
+    const guard = setup({ iat: SECONDS(now), sessionsValidFrom: null });
     await expect(guard.canActivate(contextWithToken('t'))).rejects.toThrow(UnauthorizedException);
   });
 
   it('lets public routes through without any database lookup', async () => {
-    const guard = setup({ iat: SECONDS(now), passwordChangedAt: now, isPublic: true });
+    const guard = setup({ iat: SECONDS(now), sessionsValidFrom: now, isPublic: true });
     await expect(guard.canActivate(contextWithToken())).resolves.toBe(true);
   });
 });
