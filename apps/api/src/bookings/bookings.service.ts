@@ -105,7 +105,7 @@ export class BookingsService {
         dto,
       );
 
-      return tx.booking.create({
+      const booking = await tx.booking.create({
         data: {
           ownerId,
           clientId,
@@ -115,8 +115,17 @@ export class BookingsService {
           durationMins: dto.durationMins,
           notes: [submittedDetailsNote, dto.notes].filter(Boolean).join('\n\n') || undefined,
         },
-        include: { client: true },
       });
+
+      // This route is public. Returning the Prisma relation here exposed the
+      // existing client's CRM fields to anyone who submitted that email.
+      return {
+        id: booking.id,
+        shootType: booking.shootType,
+        stage: booking.stage,
+        scheduledAt: booking.scheduledAt,
+        durationMins: booking.durationMins,
+      };
     });
   }
 
@@ -124,9 +133,8 @@ export class BookingsService {
    * Finds or creates the portal submitter's Client record. The portal is
    * public and unauthenticated, so an existing client's details are never
    * overwritten from it: anyone who knows a client's email could otherwise
-   * rename them or change their phone number in the owner's CRM. Only a
-   * missing phone is filled in. If the submitted details differ from what's
-   * on file, they're recorded on the booking instead, for the owner to see.
+   * alter their CRM record. If submitted details differ from what's on file,
+   * they're recorded on the booking instead, for the owner to see.
    */
   private async resolvePortalClient(
     tx: Prisma.TransactionClient,
@@ -150,15 +158,8 @@ export class BookingsService {
       return { clientId: created.id };
     }
 
-    if (!existing.phone && dto.clientPhone) {
-      await tx.client.update({
-        where: { id: existing.id },
-        data: { phone: dto.clientPhone },
-      });
-    }
-
     const nameDiffers = dto.clientName !== existing.name;
-    const phoneDiffers = Boolean(existing.phone && dto.clientPhone && dto.clientPhone !== existing.phone);
+    const phoneDiffers = dto.clientPhone !== existing.phone;
     if (!nameDiffers && !phoneDiffers) return { clientId: existing.id };
 
     const submitted = [
