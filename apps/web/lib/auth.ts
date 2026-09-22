@@ -42,6 +42,7 @@ export function clearToken() {
  */
 export function isPublicPath(pathname: string): boolean {
   if (pathname === "/login" || pathname === "/register") return true;
+  if (pathname === "/forgot-password" || pathname === "/reset-password") return true;
   if (pathname.startsWith("/book/")) return true;
   if (pathname.startsWith("/gallery/")) return true;
   if (pathname.startsWith("/invoices/")) return true;
