@@ -70,9 +70,18 @@ export class QuestionnairesService {
       throw new ConflictException('This questionnaire has already been submitted');
     }
 
-    return this.prisma.questionnaireResponse.update({
-      where: { id },
+    // Same atomic claim as contract signing: the check above is only a fast
+    // path, this is what actually prevents a double submit from racing.
+    const claimed = await this.prisma.questionnaireResponse.updateMany({
+      where: { id, submittedAt: null },
       data: { answers: dto.answers, submittedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictException('This questionnaire has already been submitted');
+    }
+
+    return this.prisma.questionnaireResponse.findUniqueOrThrow({
+      where: { id },
       include: { template: true },
     });
   }

@@ -10,9 +10,17 @@ export const bookingStageSchema = z.enum([
 ]);
 export type BookingStage = z.infer<typeof bookingStageSchema>;
 
+/**
+ * Email addresses are stored lowercase so lookups are case-insensitive:
+ * User.email and Client(ownerId, email) are unique, and without this
+ * "Foo@x.com" and "foo@x.com" became two accounts / two client records,
+ * and a login with different casing failed against an existing account.
+ */
+const emailSchema = z.string().trim().toLowerCase().email();
+
 export const createClientSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: emailSchema,
   phone: z.string().optional(),
   source: z.string().optional(),
   notes: z.string().optional(),
@@ -101,7 +109,7 @@ export type AvailableSlotsQuery = z.infer<typeof availableSlotsQuerySchema>;
 
 export const publicBookingRequestSchema = z.object({
   clientName: z.string().min(1),
-  clientEmail: z.string().email(),
+  clientEmail: emailSchema,
   clientPhone: z.string().optional(),
   shootType: z.string().min(1),
   scheduledAt: z.coerce.date(),
@@ -284,14 +292,14 @@ export const timeZoneSchema = z
 
 export const registerSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(8),
   timezone: timeZoneSchema.optional(),
 });
 export type RegisterDto = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(1),
 });
 export type LoginDto = z.infer<typeof loginSchema>;

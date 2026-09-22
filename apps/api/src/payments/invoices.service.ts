@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -26,8 +27,15 @@ function computeTotals(invoice: InvoiceWithDetails) {
   return { totalCents, paidCents, balanceCents: totalCents - paidCents };
 }
 
+/** Prisma's unique-constraint error, without importing the runtime enum. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
+}
+
 @Injectable()
 export class InvoicesService {
+  private readonly logger = new Logger(InvoicesService.name);
+
   constructor(
     @Inject(PRISMA) private readonly prisma: PrismaClient,
     private readonly ownerContext: OwnerContextService,
@@ -126,10 +134,33 @@ export class InvoicesService {
     });
   }
 
+  /**
+   * Stripe retries webhook deliveries (and can send the same event more than
+   * once), so this must be idempotent: without it, a retry recorded a second
+   * Payment for the same charge and could mark an invoice PAID on half the
+   * money. `Payment.stripeChargeId` is unique, so a repeat insert is
+   * rejected by the database and treated as already-handled.
+   */
   async handleCheckoutCompleted(invoiceId: string, amountCents: number, stripeChargeId: string) {
-    await this.prisma.payment.create({
-      data: { invoiceId, amountCents, method: 'stripe_card', stripeChargeId },
-    });
+    if (!stripeChargeId) {
+      throw new BadRequestException('Stripe event has no payment identifier to deduplicate on');
+    }
+
+    const invoice = await this.prisma.invoice.findUnique({ where: { id: invoiceId } });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+
+    try {
+      await this.prisma.payment.create({
+        data: { invoiceId, amountCents, method: 'stripe_card', stripeChargeId },
+      });
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        this.logger.log(`Ignoring duplicate Stripe payment ${stripeChargeId}`);
+        return;
+      }
+      throw err;
+    }
+
     await this.recomputeStatus(invoiceId);
   }
 

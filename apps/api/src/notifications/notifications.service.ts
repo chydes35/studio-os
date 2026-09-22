@@ -95,7 +95,10 @@ export class NotificationsService {
     const now = new Date();
     const overdueInvoices = await this.prisma.invoice.findMany({
       where: {
-        status: { in: ['SENT', 'PARTIALLY_PAID'] },
+        // OVERDUE belongs here too: once the first run flipped the status,
+        // the invoice fell out of this query and the 24h resend below could
+        // never fire, so every overdue invoice got exactly one reminder ever.
+        status: { in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
         dueAt: { lt: now },
         booking: { ownerId },
       },
@@ -113,7 +116,9 @@ export class NotificationsService {
 
       const recentReminder = await this.prisma.emailLog.findFirst({
         where: {
-          bookingId: invoice.bookingId,
+          // Per invoice, not per booking: a booking with two overdue
+          // invoices used to send a reminder for only one of them.
+          invoiceId: invoice.id,
           type: 'invoice_overdue',
           createdAt: { gte: new Date(now.getTime() - OVERDUE_RESEND_INTERVAL_MS) },
         },
@@ -132,6 +137,7 @@ export class NotificationsService {
         data: {
           ownerId: invoice.booking.ownerId,
           bookingId: invoice.bookingId,
+          invoiceId: invoice.id,
           type: 'invoice_overdue',
           recipientEmail: invoice.booking.client.email,
           subject,
