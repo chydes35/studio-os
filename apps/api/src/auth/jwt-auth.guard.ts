@@ -1,4 +1,12 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import type { PrismaClient } from '@repo/db';
+import { PRISMA } from '../db/db.module.js';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
@@ -8,6 +16,8 @@ export interface AuthenticatedUser {
   id: string;
   email: string;
   role: 'OWNER' | 'STAFF';
+  /** Issued-at, in seconds; set by the signer, used for the reset check. */
+  iat?: number;
 }
 
 declare global {
@@ -31,6 +41,7 @@ export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
+    @Inject(PRISMA) private readonly prisma: PrismaClient,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -44,12 +55,31 @@ export class JwtAuthGuard implements CanActivate {
     const token = this.extractToken(request);
     if (!token) throw new UnauthorizedException('Missing bearer token');
 
+    let payload: AuthenticatedUser;
     try {
-      request.user = await this.jwtService.verifyAsync<AuthenticatedUser>(token);
-      return true;
+      payload = await this.jwtService.verifyAsync<AuthenticatedUser>(token);
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
+
+    // A valid signature isn't enough: the account must still exist and the
+    // password must not have changed since this token was issued. That is
+    // what makes a password reset end sessions someone else may be holding.
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.id },
+      select: { passwordChangedAt: true },
+    });
+    if (!user) throw new UnauthorizedException('Account no longer exists');
+
+    const changedAtSeconds = Math.floor(user.passwordChangedAt.getTime() / 1000);
+    // `iat` is whole seconds, so a token minted in the same second as the
+    // change (logging straight back in) must still count as newer.
+    if (payload.iat !== undefined && changedAtSeconds > payload.iat) {
+      throw new UnauthorizedException('Password was changed; please sign in again');
+    }
+
+    request.user = payload;
+    return true;
   }
 
   private extractToken(request: Request): string | null {

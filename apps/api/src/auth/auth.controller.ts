@@ -1,7 +1,13 @@
 import { Body, Controller, Get, Inject, Patch, Post, Req, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import type { PrismaClient } from '@repo/db';
-import { loginSchema, registerSchema, updateProfileSchema } from '@repo/shared';
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  registerSchema,
+  resetPasswordSchema,
+  updateProfileSchema,
+} from '@repo/shared';
 import { PRISMA } from '../db/db.module.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { AuthService, toAuthUser } from './auth.service.js';
@@ -34,6 +40,27 @@ export class AuthController {
     body: ReturnType<typeof loginSchema.parse>,
   ) {
     return this.authService.login(body);
+  }
+
+  /** Always 200, so it can't be used to check whether an address is registered. */
+  @Public()
+  @Throttle({ default: RATE_LIMITS.forgotPassword })
+  @Post('forgot-password')
+  forgotPassword(
+    @Body(new ZodValidationPipe(forgotPasswordSchema))
+    body: ReturnType<typeof forgotPasswordSchema.parse>,
+  ) {
+    return this.authService.requestPasswordReset(body);
+  }
+
+  @Public()
+  @Throttle({ default: RATE_LIMITS.resetPassword })
+  @Post('reset-password')
+  resetPassword(
+    @Body(new ZodValidationPipe(resetPasswordSchema))
+    body: ReturnType<typeof resetPasswordSchema.parse>,
+  ) {
+    return this.authService.resetPassword(body);
   }
 
   /** Lets a client re-validate a stored token and refresh its cached user info on app load. */

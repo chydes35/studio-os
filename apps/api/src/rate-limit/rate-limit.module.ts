@@ -19,6 +19,8 @@ const HOUR = 60 * MINUTE;
  */
 export const RATE_LIMITS = {
   login: { limit: 10, ttl: MINUTE },
+  forgotPassword: { limit: 5, ttl: HOUR },
+  resetPassword: { limit: 10, ttl: HOUR },
   register: { limit: 5, ttl: HOUR },
   galleryPassword: { limit: 10, ttl: MINUTE },
   galleryAction: { limit: 60, ttl: MINUTE },

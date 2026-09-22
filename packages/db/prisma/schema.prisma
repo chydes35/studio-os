@@ -46,15 +46,18 @@ enum StorageProvider {
 // ---------- Core ----------
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String
-  passwordHash String
-  role         Role     @default(OWNER)
+  id                String   @id @default(cuid())
+  email             String   @unique
+  name              String
+  passwordHash      String
+  role              Role     @default(OWNER)
+  /// Bumped on every password change; tokens issued before it are rejected,
+  /// so a reset immediately signs out sessions an attacker may hold.
+  passwordChangedAt DateTime @default(now())
   /// IANA zone (e.g. "America/Chicago"); availability rules are wall-clock times in it.
-  timezone     String   @default("UTC")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  timezone          String   @default("UTC")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   clients                Client[]
   bookings               Booking[]
@@ -66,6 +69,7 @@ model User {
   questionnaireTemplates QuestionnaireTemplate[]
   expenses               Expense[]
   emailLogs              EmailLog[]
+  passwordResetTokens    PasswordResetToken[]
 }
 
 model Client {
@@ -251,6 +255,20 @@ model EmailLog {
   @@index([bookingId])
   @@index([equipmentId])
   @@index([invoiceId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SHA-256 of the token that was emailed; the raw value is never stored,
+  /// so a database leak cannot be replayed to take over accounts.
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // ---------- Media / Galleries ----------

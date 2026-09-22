@@ -62,6 +62,11 @@ export default function LoginPage() {
         </button>
       </form>
       <p className="mt-3 text-center text-xs text-slate-500">
+        <Link href="/forgot-password" className="underline">
+          Forgot your password?
+        </Link>
+      </p>
+      <p className="mt-2 text-center text-xs text-slate-500">
         Don&apos;t have a studio account yet?{" "}
         <Link href="/register" className="underline">
           Create one
