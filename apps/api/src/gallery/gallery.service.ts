@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -79,15 +80,66 @@ export class GalleryService {
 
     return {
       id: gallery.id,
+      downloadsEnabled: gallery.downloadsEnabled,
       media: media.map((m) => ({
         id: m.id,
         type: m.type,
         isFavorited: m.isFavorited,
         previewUrl: m.previewR2Key ? this.storage.publicUrl(m.previewR2Key) : null,
         muxPlaybackId: m.muxPlaybackId,
+        // Only R2-backed photos have an original to hand over; Mux video is
+        // streamed, not downloaded.
+        canDownload: gallery.downloadsEnabled && Boolean(m.r2Key),
         comments: m.comments,
       })),
     };
+  }
+
+  /** Owner switch that releases full-resolution originals to the client. */
+  async setDownloadsEnabled(galleryId: string, enabled: boolean) {
+    const ownerId = await this.ownerContext.getOwnerId();
+    const gallery = await this.prisma.gallery.findUnique({
+      where: { id: galleryId },
+      include: { booking: true },
+    });
+    if (!gallery || gallery.booking.ownerId !== ownerId) {
+      throw new NotFoundException('Gallery not found');
+    }
+    return this.prisma.gallery.update({
+      where: { id: galleryId },
+      data: { downloadsEnabled: enabled },
+    });
+  }
+
+  /**
+   * Client-facing download of the untouched original. Password-gated like
+   * every other client action, and refused unless the owner has released
+   * downloads for this gallery — the previews are watermarked precisely so
+   * the originals stay withheld until then.
+   */
+  async getDownloadUrl(mediaId: string, password: string) {
+    const media = await this.prisma.media.findUnique({
+      where: { id: mediaId },
+      include: { gallery: true },
+    });
+    if (!media) throw new NotFoundException('Media not found');
+    await this.verifyPassword(media.galleryId, password);
+
+    if (!media.gallery.downloadsEnabled) {
+      throw new ForbiddenException(
+        'Downloads for this gallery have not been released yet. Please contact your photographer.',
+      );
+    }
+    if (!media.r2Key || media.processingStatus !== 'ready') {
+      throw new NotFoundException('This file is not available for download');
+    }
+
+    const fileName = media.fileName ?? `${media.id}.jpg`;
+    const [url, sizeBytes] = await Promise.all([
+      this.storage.getPresignedDownloadUrl(media.r2Key, fileName),
+      this.storage.getObjectSize(media.r2Key),
+    ]);
+    return { url, fileName, sizeBytes };
   }
 
   async verifyMediaGalleryPassword(mediaId: string, password: string) {

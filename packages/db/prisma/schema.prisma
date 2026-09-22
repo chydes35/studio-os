@@ -256,12 +256,15 @@ model EmailLog {
 // ---------- Media / Galleries ----------
 
 model Gallery {
-  id           String    @id @default(cuid())
-  bookingId    String    @unique
-  booking      Booking   @relation(fields: [bookingId], references: [id])
-  passwordHash String
-  expiresAt    DateTime?
-  createdAt    DateTime  @default(now())
+  id               String    @id @default(cuid())
+  bookingId        String    @unique
+  booking          Booking   @relation(fields: [bookingId], references: [id])
+  passwordHash     String
+  /// Owner-controlled: clients only get full-resolution originals once this
+  /// is switched on, so finals can be withheld until the job is settled.
+  downloadsEnabled Boolean   @default(false)
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
 
   media Media[]
 }

@@ -1,5 +1,6 @@
 import {
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -100,6 +101,37 @@ export class StorageService {
     return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
       expiresIn: PRESIGN_EXPIRY_SECONDS,
     });
+  }
+
+  /**
+   * A time-limited link that saves the object under `fileName` instead of
+   * opening it in the browser. The bytes stream straight from storage to the
+   * client, so the API never handles a full-resolution file — the same reason
+   * uploads are presigned PUTs.
+   */
+  async getPresignedDownloadUrl(key: string, fileName: string): Promise<string> {
+    return getSignedUrl(
+      this.client,
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        // Quotes and backslashes would otherwise break out of the header.
+        ResponseContentDisposition: `attachment; filename="${fileName.replace(/["\\]/g, '')}"`,
+      }),
+      { expiresIn: PRESIGN_EXPIRY_SECONDS },
+    );
+  }
+
+  /** Byte size of a stored object, for showing the download size up front. */
+  async getObjectSize(key: string): Promise<number | null> {
+    try {
+      const head = await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      return head.ContentLength ?? null;
+    } catch {
+      return null;
+    }
   }
 
   contractKey(contractId: string) {

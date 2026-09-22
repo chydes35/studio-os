@@ -17,6 +17,7 @@ export default function BookingDetailPage({
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [gallery, setGallery] = useState<Gallery | null>(null);
+  const [savingDownloads, setSavingDownloads] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,6 +48,20 @@ export default function BookingDetailPage({
       setPasswordInput("");
     } catch (err) {
       setError(String(err));
+    }
+  }
+
+  async function handleToggleDownloads(enabled: boolean) {
+    if (!gallery) return;
+    setSavingDownloads(true);
+    setError(null);
+    try {
+      const updated = await api.setGalleryDownloads(gallery.id, enabled);
+      setGallery({ ...gallery, downloadsEnabled: updated.downloadsEnabled });
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSavingDownloads(false);
     }
   }
 
@@ -136,6 +151,23 @@ export default function BookingDetailPage({
           <div className="rounded-lg border border-slate-200 bg-white p-4">
             <p className="text-sm font-semibold">Share with your client</p>
             <p className="mt-1 break-all text-sm text-slate-600">{galleryUrl}</p>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                checked={gallery.downloadsEnabled ?? false}
+                disabled={savingDownloads}
+                onChange={(e) => handleToggleDownloads(e.target.checked)}
+              />
+              Release full-resolution downloads
+            </label>
+            <p className="mt-1 text-xs text-slate-500">
+              {gallery.downloadsEnabled
+                ? "Your client can download the original files from the gallery."
+                : "Your client sees watermarked previews only. Turn this on when the job is settled."}
+            </p>
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-4">

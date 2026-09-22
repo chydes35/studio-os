@@ -70,7 +70,12 @@ export default function PublicGalleryPage({
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold">Your gallery</h1>
+      <h1 className="mb-2 text-xl font-semibold">Your gallery</h1>
+      <p className="mb-4 text-xs text-slate-500">
+        {gallery.downloadsEnabled
+          ? "Open a photo to download the full-resolution original."
+          : "These previews are watermarked. Your photographer will release the full-resolution files here."}
+      </p>
       {gallery.media.length === 0 ? (
         <p className="text-sm text-slate-500">No photos yet — check back soon.</p>
       ) : (
