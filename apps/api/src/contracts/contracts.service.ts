@@ -87,32 +87,54 @@ export class ContractsService {
       throw new ConflictException('This contract has already been signed');
     }
 
+    // Claim the signature atomically: "check signedAt, then update" let two
+    // near-simultaneous submits both pass the check and the second overwrite
+    // the first one's signer, IP and PDF on a legally meaningful document.
+    // Only the request that flips signedAt from NULL proceeds.
     const signedAt = new Date();
-    const pdfBuffer = await this.pdf.generateContractPdf({
-      title: contract.template.name,
-      bodyText: contract.renderedMarkdown,
-      signerName: dto.signerName,
-      signedAt,
-      signatureImageDataUrl: dto.signatureImage,
-      signerIp,
-      signerUserAgent,
+    const claimed = await this.prisma.contract.updateMany({
+      where: { id: contractId, signedAt: null },
+      data: { signedAt },
     });
-    const documentHash = createHash('sha256').update(pdfBuffer).digest('hex');
-    const pdfKey = this.storage.contractKey(contract.id);
-    await this.storage.putObjectBuffer(pdfKey, pdfBuffer, 'application/pdf');
+    if (claimed.count === 0) {
+      throw new ConflictException('This contract has already been signed');
+    }
 
-    return this.prisma.contract.update({
-      where: { id: contractId },
-      data: {
-        signedAt,
+    try {
+      const pdfBuffer = await this.pdf.generateContractPdf({
+        title: contract.template.name,
+        bodyText: contract.renderedMarkdown,
         signerName: dto.signerName,
-        signatureImage: dto.signatureImage,
+        signedAt,
+        signatureImageDataUrl: dto.signatureImage,
         signerIp,
         signerUserAgent,
-        documentHash,
-        pdfR2Key: pdfKey,
-      },
-    });
+      });
+      const documentHash = createHash('sha256').update(pdfBuffer).digest('hex');
+      const pdfKey = this.storage.contractKey(contract.id);
+      await this.storage.putObjectBuffer(pdfKey, pdfBuffer, 'application/pdf');
+
+      return await this.prisma.contract.update({
+        where: { id: contractId },
+        data: {
+          signedAt,
+          signerName: dto.signerName,
+          signatureImage: dto.signatureImage,
+          signerIp,
+          signerUserAgent,
+          documentHash,
+          pdfR2Key: pdfKey,
+        },
+      });
+    } catch (err) {
+      // Release the claim: a contract left with signedAt set but no signature
+      // or PDF would read as signed and could never be signed again.
+      await this.prisma.contract.updateMany({
+        where: { id: contractId, signedAt, signerName: null },
+        data: { signedAt: null },
+      });
+      throw err;
+    }
   }
 
   async getDownloadUrl(contractId: string) {

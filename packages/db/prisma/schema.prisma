@@ -56,16 +56,16 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  clients          Client[]
-  bookings         Booking[]
-  availabilityRules AvailabilityRule[]
-  calendarBlocks   CalendarBlock[]
-  equipment        Equipment[]
-  locations        Location[]
-  contractTemplates ContractTemplate[]
+  clients                Client[]
+  bookings               Booking[]
+  availabilityRules      AvailabilityRule[]
+  calendarBlocks         CalendarBlock[]
+  equipment              Equipment[]
+  locations              Location[]
+  contractTemplates      ContractTemplate[]
   questionnaireTemplates QuestionnaireTemplate[]
-  expenses         Expense[]
-  emailLogs        EmailLog[]
+  expenses               Expense[]
+  emailLogs              EmailLog[]
 }
 
 model Client {
@@ -102,13 +102,13 @@ model Booking {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  contract              Contract?
-  invoices              Invoice[]
-  gallery               Gallery?
+  contract               Contract?
+  invoices               Invoice[]
+  gallery                Gallery?
   questionnaireResponses QuestionnaireResponse[]
-  expenses              Expense[]
-  emailLogs             EmailLog[]
-  equipmentAssignments  BookingEquipment[]
+  expenses               Expense[]
+  emailLogs              EmailLog[]
+  equipmentAssignments   BookingEquipment[]
 
   @@index([ownerId])
   @@index([clientId])
@@ -118,26 +118,26 @@ model Booking {
 // ---------- Scheduling ----------
 
 model AvailabilityRule {
-  id            String   @id @default(cuid())
+  id            String @id @default(cuid())
   ownerId       String
-  owner         User     @relation(fields: [ownerId], references: [id])
+  owner         User   @relation(fields: [ownerId], references: [id])
   dayOfWeek     Int // 0-6, Sunday-Saturday
   startTime     String // "09:00"
   endTime       String // "17:00"
-  bufferMinutes Int      @default(0)
+  bufferMinutes Int    @default(0)
 
   @@index([ownerId])
 }
 
 model CalendarBlock {
-  id           String   @id @default(cuid())
-  ownerId      String
-  owner        User     @relation(fields: [ownerId], references: [id])
-  source       String // "google" | "apple" | "manual"
-  externalId   String?
-  startsAt     DateTime
-  endsAt       DateTime
-  title        String?
+  id         String   @id @default(cuid())
+  ownerId    String
+  owner      User     @relation(fields: [ownerId], references: [id])
+  source     String // "google" | "apple" | "manual"
+  externalId String?
+  startsAt   DateTime
+  endsAt     DateTime
+  title      String?
 
   @@index([ownerId])
 }
@@ -145,69 +145,71 @@ model CalendarBlock {
 // ---------- Contracts ----------
 
 model ContractTemplate {
-  id        String   @id @default(cuid())
-  ownerId   String
-  owner     User     @relation(fields: [ownerId], references: [id])
-  name      String
+  id           String   @id @default(cuid())
+  ownerId      String
+  owner        User     @relation(fields: [ownerId], references: [id])
+  name         String
   bodyMarkdown String // supports {{client_name}}, {{shoot_date}}, {{price}} etc.
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   contracts Contract[]
 }
 
 model Contract {
-  id              String    @id @default(cuid())
-  bookingId       String    @unique
-  booking         Booking   @relation(fields: [bookingId], references: [id])
-  templateId      String
-  template        ContractTemplate @relation(fields: [templateId], references: [id])
+  id               String           @id @default(cuid())
+  bookingId        String           @unique
+  booking          Booking          @relation(fields: [bookingId], references: [id])
+  templateId       String
+  template         ContractTemplate @relation(fields: [templateId], references: [id])
   renderedMarkdown String
-  signedAt        DateTime?
-  signerName      String?
-  signatureImage  String? // data URL or R2 key of the captured signature
-  signerIp        String?
-  signerUserAgent String?
-  documentHash    String? // sha256 of the finalized PDF, for tamper evidence
-  pdfR2Key        String?
-  createdAt       DateTime  @default(now())
+  signedAt         DateTime?
+  signerName       String?
+  signatureImage   String? // data URL or R2 key of the captured signature
+  signerIp         String?
+  signerUserAgent  String?
+  documentHash     String? // sha256 of the finalized PDF, for tamper evidence
+  pdfR2Key         String?
+  createdAt        DateTime         @default(now())
 }
 
 // ---------- Financials ----------
 
 model Invoice {
-  id           String        @id @default(cuid())
-  bookingId    String
-  booking      Booking       @relation(fields: [bookingId], references: [id])
-  status       InvoiceStatus @default(DRAFT)
-  dueAt        DateTime?
+  id                    String        @id @default(cuid())
+  bookingId             String
+  booking               Booking       @relation(fields: [bookingId], references: [id])
+  status                InvoiceStatus @default(DRAFT)
+  dueAt                 DateTime?
   stripePaymentIntentId String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   lineItems InvoiceLineItem[]
   payments  Payment[]
+  emailLogs EmailLog[]
 
   @@index([bookingId])
 }
 
 model InvoiceLineItem {
-  id          String  @id @default(cuid())
-  invoiceId   String
-  invoice     Invoice @relation(fields: [invoiceId], references: [id])
-  description String
-  quantity    Int     @default(1)
+  id              String  @id @default(cuid())
+  invoiceId       String
+  invoice         Invoice @relation(fields: [invoiceId], references: [id])
+  description     String
+  quantity        Int     @default(1)
   unitAmountCents Int
 }
 
 model Payment {
-  id              String   @id @default(cuid())
-  invoiceId       String
-  invoice         Invoice  @relation(fields: [invoiceId], references: [id])
-  amountCents     Int
-  method          String // "stripe_card" | "stripe_ach" | "manual"
-  stripeChargeId  String?
-  paidAt          DateTime @default(now())
+  id             String   @id @default(cuid())
+  invoiceId      String
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id])
+  amountCents    Int
+  method         String // "stripe_card" | "stripe_ach" | "manual"
+  /// Unique so a retried Stripe webhook can't record the same charge twice.
+  stripeChargeId String?  @unique
+  paidAt         DateTime @default(now())
 }
 
 model Expense {
@@ -236,6 +238,8 @@ model EmailLog {
   booking        Booking?   @relation(fields: [bookingId], references: [id])
   equipmentId    String?
   equipment      Equipment? @relation(fields: [equipmentId], references: [id])
+  invoiceId      String?
+  invoice        Invoice?   @relation(fields: [invoiceId], references: [id])
   type           String // "shoot_reminder" | "invoice_overdue" | "equipment_service_due"
   recipientEmail String
   subject        String
@@ -246,36 +250,37 @@ model EmailLog {
   @@index([ownerId])
   @@index([bookingId])
   @@index([equipmentId])
+  @@index([invoiceId])
 }
 
 // ---------- Media / Galleries ----------
 
 model Gallery {
-  id           String   @id @default(cuid())
-  bookingId    String   @unique
-  booking      Booking  @relation(fields: [bookingId], references: [id])
+  id           String    @id @default(cuid())
+  bookingId    String    @unique
+  booking      Booking   @relation(fields: [bookingId], references: [id])
   passwordHash String
   expiresAt    DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   media Media[]
 }
 
 model Media {
-  id              String          @id @default(cuid())
-  galleryId       String
-  gallery         Gallery         @relation(fields: [galleryId], references: [id])
-  type            MediaType
-  storageProvider StorageProvider
-  fileName        String?
-  r2Key           String? // original, private — never served directly until purchased
-  previewR2Key    String? // watermarked derivative, publicly servable
-  muxAssetId      String?
-  muxPlaybackId   String?
-  isOriginal      Boolean         @default(false) // true = purchased/unwatermarked
-  isFavorited     Boolean         @default(false)
-  processingStatus String         @default("pending") // pending | ready | failed
-  createdAt       DateTime        @default(now())
+  id               String          @id @default(cuid())
+  galleryId        String
+  gallery          Gallery         @relation(fields: [galleryId], references: [id])
+  type             MediaType
+  storageProvider  StorageProvider
+  fileName         String?
+  r2Key            String? // original, private — never served directly until purchased
+  previewR2Key     String? // watermarked derivative, publicly servable
+  muxAssetId       String?
+  muxPlaybackId    String?
+  isOriginal       Boolean         @default(false) // true = purchased/unwatermarked
+  isFavorited      Boolean         @default(false)
+  processingStatus String          @default("pending") // pending | ready | failed
+  createdAt        DateTime        @default(now())
 
   comments Comment[]
 
@@ -283,13 +288,13 @@ model Media {
 }
 
 model Comment {
-  id              String   @id @default(cuid())
-  mediaId         String
-  media           Media    @relation(fields: [mediaId], references: [id])
-  authorName      String
-  body            String
+  id               String   @id @default(cuid())
+  mediaId          String
+  media            Media    @relation(fields: [mediaId], references: [id])
+  authorName       String
+  body             String
   timestampSeconds Float? // populated for video comments
-  createdAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
 
   @@index([mediaId])
 }
@@ -308,30 +313,30 @@ model QuestionnaireTemplate {
 }
 
 model QuestionnaireResponse {
-  id           String                 @id @default(cuid())
-  bookingId    String
-  booking      Booking                @relation(fields: [bookingId], references: [id])
-  templateId   String
-  template     QuestionnaireTemplate  @relation(fields: [templateId], references: [id])
-  answers      Json
-  submittedAt  DateTime?
-  createdAt    DateTime               @default(now())
+  id          String                @id @default(cuid())
+  bookingId   String
+  booking     Booking               @relation(fields: [bookingId], references: [id])
+  templateId  String
+  template    QuestionnaireTemplate @relation(fields: [templateId], references: [id])
+  answers     Json
+  submittedAt DateTime?
+  createdAt   DateTime              @default(now())
 }
 
 // ---------- Equipment ----------
 
 model Equipment {
-  id              String    @id @default(cuid())
-  ownerId         String
-  owner           User      @relation(fields: [ownerId], references: [id])
-  name            String
-  serialNumber    String?
-  purchaseDate    DateTime?
-  lastServicedAt  DateTime?
-  nextServiceDue  DateTime?
-  notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  ownerId        String
+  owner          User      @relation(fields: [ownerId], references: [id])
+  name           String
+  serialNumber   String?
+  purchaseDate   DateTime?
+  lastServicedAt DateTime?
+  nextServiceDue DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   bookingAssignments BookingEquipment[]
   emailLogs          EmailLog[]
@@ -356,15 +361,15 @@ model BookingEquipment {
 // ---------- Locations ----------
 
 model Location {
-  id        String   @id @default(cuid())
-  ownerId   String
-  owner     User     @relation(fields: [ownerId], references: [id])
-  name      String
-  latitude  Float
-  longitude Float
+  id            String   @id @default(cuid())
+  ownerId       String
+  owner         User     @relation(fields: [ownerId], references: [id])
+  name          String
+  latitude      Float
+  longitude     Float
   bestTimeOfDay String?
-  notes     String?
-  createdAt DateTime @default(now())
+  notes         String?
+  createdAt     DateTime @default(now())
 
   photos   LocationPhoto[]
   bookings Booking[]
