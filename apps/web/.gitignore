@@ -34,3 +34,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Written by `next dev` on every run (Next's agent-rules files), not authored here
+/AGENTS.md
+/CLAUDE.md
