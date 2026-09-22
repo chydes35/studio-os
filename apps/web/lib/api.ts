@@ -15,6 +15,7 @@ import type {
   CreateExpenseDto,
   CreateInvoiceDto,
   CreateLocationDto,
+  ChangePasswordDto,
   CreateQuestionnaireTemplateDto,
   ForgotPasswordDto,
   LoginDto,
@@ -552,6 +553,13 @@ export const api = {
       body: JSON.stringify({ locationId }),
     }),
 
+  changePassword: (dto: ChangePasswordDto) =>
+    request<AuthResponse>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+  signOutEverywhere: () =>
+    request<{ ok: true }>("/auth/sign-out-everywhere", { method: "POST" }),
   forgotPassword: (dto: ForgotPasswordDto) =>
     request<{ ok: true }>("/auth/forgot-password", {
       method: "POST",

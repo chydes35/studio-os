@@ -14,7 +14,7 @@ function setup(options: { user?: typeof USER | null; token?: Record<string, unkn
   const prisma = {
     user: {
       findUnique: vi.fn(async () => (options.user === undefined ? USER : options.user)),
-      update: vi.fn(async (_args: { data: { passwordHash: string; passwordChangedAt: Date } }) => USER),
+      update: vi.fn(async (_args: { data: { passwordHash: string; sessionsValidFrom: Date } }) => USER),
     },
     passwordResetToken: {
       create: vi.fn(async (args: { data: { tokenHash: string } }) => ({ id: 'tok_1', ...args.data })),
@@ -86,7 +86,7 @@ describe('AuthService.resetPassword', () => {
     expiresAt: new Date(Date.now() + 60_000),
   };
 
-  it('sets the new password and stamps passwordChangedAt', async () => {
+  it('sets the new password and stamps sessionsValidFrom', async () => {
     const { prisma, service } = setup({ token: validToken });
 
     await expect(service.resetPassword({ token: 'raw', password: 'newpassword1' })).resolves.toEqual(
@@ -95,7 +95,7 @@ describe('AuthService.resetPassword', () => {
 
     const update = prisma.user.update.mock.calls[0]![0];
     expect(bcrypt.compareSync('newpassword1', update.data.passwordHash)).toBe(true);
-    expect(update.data.passwordChangedAt).toBeInstanceOf(Date);
+    expect(update.data.sessionsValidFrom).toBeInstanceOf(Date);
   });
 
   it.each([
