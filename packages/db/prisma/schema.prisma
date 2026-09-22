@@ -51,9 +51,10 @@ model User {
   name              String
   passwordHash      String
   role              Role     @default(OWNER)
-  /// Bumped on every password change; tokens issued before it are rejected,
-  /// so a reset immediately signs out sessions an attacker may hold.
-  passwordChangedAt DateTime @default(now())
+  /// Tokens issued before this instant are rejected. Bumped by a password
+  /// change, a reset, and "sign out everywhere", each of which should end
+  /// sessions that already exist elsewhere.
+  sessionsValidFrom DateTime @default(now())
   /// IANA zone (e.g. "America/Chicago"); availability rules are wall-clock times in it.
   timezone          String   @default("UTC")
   createdAt         DateTime @default(now())

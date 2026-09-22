@@ -59,6 +59,9 @@ export function NavBar() {
             <Link href="/equipment" className="text-sm text-slate-600 hover:text-slate-900">
               Equipment
             </Link>
+            <Link href="/account" className="text-sm text-slate-600 hover:text-slate-900">
+              Account
+            </Link>
             <Link href="/locations" className="text-sm text-slate-600 hover:text-slate-900">
               Locations
             </Link>
