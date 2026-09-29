@@ -79,5 +79,24 @@ jobs:
       - name: Test
         run: npx turbo run test
 
+      # End-to-end API tests: real Nest app, real Postgres, and MinIO standing
+      # in for R2 (same S3 API). Covers the money paths, tenant isolation and
+      # the route-authorization sweep in apps/api/test.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=studio_os -e MINIO_ROOT_PASSWORD=studio_os_minio \
+            quay.io/minio/minio server /data
+          for i in $(seq 1 30); do curl -sf http://localhost:9000/minio/health/live && break; sleep 1; done
+          docker run --rm --network host --entrypoint sh quay.io/minio/mc -c \
+            "mc alias set local http://localhost:9000 studio_os studio_os_minio && \
+             mc mb local/studio-os-media && \
+             mc anonymous set download local/studio-os-media/previews"
+
+      - name: API e2e
+        run: npm run test:e2e --workspace=api
+        env:
+          E2E_DATABASE_URL: postgresql://studio_os:studio_os@localhost:5432/studio_os_ci
+
       - name: Build
         run: npx turbo run build --filter=api --filter=web
