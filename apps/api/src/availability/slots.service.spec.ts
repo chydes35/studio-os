@@ -17,10 +17,20 @@ function service(opts: { timezone: string; rules: Rule[]; bookings?: Booking[] }
   return new SlotsService(db as unknown as PrismaClient);
 }
 
-// 2026-09-28 is a Monday (dayOfWeek 1), far enough out that no slot is "past".
+// 2026-09-28 is a Monday (dayOfWeek 1). The service hides slots already in the
+// past, so the clock is pinned before it; without that this spec silently
+// started failing the day after the hard-coded date went by.
 const MONDAY = '2026-09-28';
 
 describe('SlotsService', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-01T12:00:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("computes slots in the studio's zone, independent of the server's", async () => {
     const slots = service({
       timezone: 'America/Chicago',

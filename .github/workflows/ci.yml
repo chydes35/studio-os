@@ -79,5 +79,24 @@ jobs:
       - name: Test
         run: npx turbo run test
 
+      # End-to-end API tests: real Nest app, real Postgres, and SeaweedFS
+      # standing in for R2 (S3 API). MinIO's public images and binaries were
+      # withdrawn, so it can no longer be pulled in CI. The tests create the
+      # bucket themselves. The config travels in an env var because a file
+      # bind-mount is one more thing to go wrong.
+      - name: Start S3-compatible storage
+        run: |
+          docker run -d --name s3 -p 9000:8333 \
+            -e 'S3CFG={"identities":[{"name":"admin","credentials":[{"accessKey":"studio_os","secretKey":"studio_os_minio"}],"actions":["Admin","Read","Write","List","Tagging"]},{"name":"anonymous","actions":["Read:studio-os-media"]}]}' \
+            --entrypoint sh chrislusf/seaweedfs:latest \
+            -c 'echo "$S3CFG" > /tmp/s3.json && exec weed server -s3 -s3.config=/tmp/s3.json -dir=/data'
+          for i in $(seq 1 60); do [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9000/)" != 000 ] && exit 0; sleep 1; done
+          docker logs s3 | tail -20; exit 1
+
+      - name: API e2e
+        run: npm run test:e2e --workspace=api
+        env:
+          E2E_DATABASE_URL: postgresql://studio_os:studio_os@localhost:5432/studio_os_ci
+
       - name: Build
         run: npx turbo run build --filter=api --filter=web

@@ -26,6 +26,12 @@ export class StorageService {
       region: 'auto',
       endpoint: endpoint || `https://${accountId}.r2.cloudflarestorage.com`,
       forcePathStyle: Boolean(endpoint), // MinIO (local dev) needs path-style; real R2 doesn't
+      // Since SDK v3.729 a presigned PUT bakes in a CRC32 of the (empty) body it
+      // was signed with. MinIO ignored it, but S3-compatible stores that verify
+      // it (Cloudflare R2 documents this) reject every real upload with a
+      // checksum mismatch. Only compute checksums when an operation requires one.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
       credentials: {
         accessKeyId: this.config.get<string>('R2_ACCESS_KEY_ID') ?? '',
         secretAccessKey: this.config.get<string>('R2_SECRET_ACCESS_KEY') ?? '',
