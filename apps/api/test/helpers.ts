@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
+import { CreateBucketCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { AppModule } from '../src/app.module.js';
 
@@ -72,13 +73,36 @@ export function bigJpeg(width = 3000, height = 2000): Promise<Buffer> {
 export const SIGNATURE_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
+/**
+ * True when the S3-compatible store (MinIO locally, whatever CI starts) is
+ * reachable, creating the test bucket if it doesn't exist yet. Storage-backed
+ * tests return early when this is false.
+ */
 export async function storageIsUp(): Promise<boolean> {
+  const client = new S3Client({
+    region: 'auto',
+    endpoint: process.env.R2_ENDPOINT,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID ?? '',
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? '',
+    },
+    maxAttempts: 1,
+    requestHandler: { requestTimeout: 3000, connectionTimeout: 2000 },
+  });
+  const Bucket = process.env.R2_BUCKET_NAME;
   try {
-    const res = await fetch(`${process.env.R2_ENDPOINT}/minio/health/live`, {
-      signal: AbortSignal.timeout(2000),
-    });
-    return res.ok;
+    try {
+      await client.send(new HeadBucketCommand({ Bucket }));
+    } catch (err) {
+      const status = (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+      if (status !== 404) throw err;
+      await client.send(new CreateBucketCommand({ Bucket }));
+    }
+    return true;
   } catch {
     return false;
+  } finally {
+    client.destroy();
   }
 }

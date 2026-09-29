@@ -15,6 +15,7 @@ Run `full` before calling anything done that touches the API, schema, or shared 
 
 - Code lives on the SSD; never move it into the iCloud Desktop folder.
 - Postgres `studio_os_postgres` (port 5433) and MinIO `studio_os_minio` (9000) are colima containers that do NOT restart with the Mac. `docker start` them (verify.sh does). A stopped DB looks like 500s with PrismaClientInitializationError. Never `docker rm` them.
+- MinIO's public images/binaries were withdrawn (2026): the local `studio_os_minio` runs from a cached image, so never remove it or its volume; CI uses SeaweedFS. Production is Cloudflare R2.
 - e2e runs against the throwaway `studio_os_test` database and refuses any DB name not ending `_test`/`_ci`. The dev DB `studio_os` holds the owner's real account: no `prisma migrate reset/dev`, no `db push` (a hook blocks them).
 - Start servers from Bash (`nohup`), not the Browser pane's `preview_start` (it cannot read the iCloud cwd). `next dev` writes untracked `apps/web/AGENTS.md`/`CLAUDE.md`; they are gitignored.
 - Dev login: `owner@studio-os.dev` / `devpassword123` (seed).
