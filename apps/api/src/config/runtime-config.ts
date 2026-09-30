@@ -50,6 +50,12 @@ export function validateRuntimeConfig(env: Record<string, string | undefined>) {
     throw new Error('CORS_ORIGINS cannot use localhost when NODE_ENV is production');
   }
 
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: env.NOTIFICATION_TIME_ZONE || 'America/Chicago' });
+  } catch {
+    throw new Error('NOTIFICATION_TIME_ZONE must be a valid IANA time zone');
+  }
+
   return { ...env, CORS_ORIGINS: corsOrigins.join(',') };
 }
 

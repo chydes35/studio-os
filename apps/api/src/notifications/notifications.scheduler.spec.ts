@@ -4,8 +4,8 @@ import { ScheduleModule, SchedulerRegistry } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
 import { PRISMA } from '../db/db.module.js';
 import { OwnerModule } from '../owner/owner.module.js';
-import { NotificationsModule } from './notifications.module.js';
-import { DAILY_CHECKS_JOB } from './notifications.scheduler.js';
+import { JobsModule } from '../jobs/jobs.module.js';
+import { DAILY_CHECKS_JOB, WORKER_JOB } from '../jobs/job-worker.service.js';
 
 @Global()
 @Module({ providers: [{ provide: PRISMA, useValue: {} }], exports: [PRISMA] })
@@ -23,7 +23,7 @@ describe('NotificationsScheduler', () => {
         ScheduleModule.forRoot(),
         FakeDbModule,
         OwnerModule,
-        NotificationsModule,
+        JobsModule,
       ],
     }).compile();
     const app = moduleRef.createNestApplication({ logger: false });
@@ -31,6 +31,7 @@ describe('NotificationsScheduler', () => {
 
     try {
       expect(app.get(SchedulerRegistry).getCronJobs().has(DAILY_CHECKS_JOB)).toBe(true);
+      expect(app.get(SchedulerRegistry).getCronJobs().has(WORKER_JOB)).toBe(true);
     } finally {
       await app.close();
     }

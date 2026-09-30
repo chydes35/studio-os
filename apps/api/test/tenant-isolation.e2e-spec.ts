@@ -68,7 +68,9 @@ describe('tenant isolation', () => {
       expect(init.status).toBe(201);
       ids.media = init.body.mediaId;
       await fetch(init.body.uploadUrl, { method: 'PUT', body: new Uint8Array(bytes) });
-      expect((await a.post(`/media/${ids.media}/complete`)).status).toBe(201);
+      const complete = await a.post(`/media/${ids.media}/complete`);
+      expect(complete.status).toBe(201);
+      expect(complete.body.processingStatus).toBe('pending');
     }
   });
   afterAll(() => app.close());

@@ -4,7 +4,7 @@ import type { GalleryService } from '../gallery/gallery.service.js';
 import type { OwnerContextService } from '../owner/owner-context.service.js';
 import type { MuxService } from '../storage/mux.service.js';
 import type { StorageService } from '../storage/storage.service.js';
-import type { WatermarkService } from '../storage/watermark.service.js';
+import type { JobQueueService } from '../jobs/job-queue.service.js';
 import { MediaService } from './media.service.js';
 
 const OWNER = 'owner_a';
@@ -19,7 +19,7 @@ function setup(media: Record<string, unknown> | null) {
     prisma as unknown as PrismaClient,
     storage as unknown as StorageService,
     {} as MuxService,
-    {} as WatermarkService,
+    {} as JobQueueService,
     {} as GalleryService,
     { getOwnerId: async () => OWNER } as OwnerContextService,
   );

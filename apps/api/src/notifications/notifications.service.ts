@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { PrismaClient } from '@repo/db';
 import { PRISMA } from '../db/db.module.js';
+import { addDays, zonedDateStr } from '../availability/zoned-time.js';
 import { formatDateOnly, formatDateTime, html, plainSubject } from './email-html.js';
 import { EmailService } from './email.service.js';
 
@@ -8,16 +9,10 @@ const REMINDER_DAYS_BEFORE = 3;
 const OVERDUE_RESEND_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const SERVICE_DUE_WARNING_DAYS = 14;
 
-function startOfDay(d: Date): Date {
-  const copy = new Date(d);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-}
-
 /**
  * Deliberately a plain singleton with no OwnerContextService dependency:
  * injecting that request-scoped service made this (and therefore
- * NotificationsScheduler) request-scoped too, and @nestjs/schedule silently
+ * the scheduled worker) request-scoped too, and @nestjs/schedule silently
  * refuses to register @Cron on non-static providers — the daily job never ran.
  * Owner scoping is passed in explicitly instead: the cron runs across every
  * studio, the manual run-now endpoint passes the caller's own ownerId.
@@ -48,10 +43,11 @@ export class NotificationsService {
 
   private async checkShootReminders(ownerId?: string): Promise<number> {
     const now = new Date();
-    const windowStart = startOfDay(
-      new Date(now.getTime() + REMINDER_DAYS_BEFORE * 24 * 60 * 60 * 1000),
-    );
-    const windowEnd = new Date(windowStart.getTime() + 24 * 60 * 60 * 1000);
+    // Fetch a broad absolute window, then select the local calendar date in
+    // each owner's zone. A server-local midnight window misses some studios.
+    const dayMs = 24 * 60 * 60 * 1000;
+    const windowStart = new Date(now.getTime() + (REMINDER_DAYS_BEFORE - 1) * dayMs);
+    const windowEnd = new Date(now.getTime() + (REMINDER_DAYS_BEFORE + 1) * dayMs);
 
     const bookings = await this.prisma.booking.findMany({
       where: {
@@ -64,6 +60,8 @@ export class NotificationsService {
 
     let count = 0;
     for (const booking of bookings) {
+      const reminderDate = addDays(zonedDateStr(now, booking.owner.timezone), REMINDER_DAYS_BEFORE);
+      if (!booking.scheduledAt || zonedDateStr(booking.scheduledAt, booking.owner.timezone) !== reminderDate) continue;
       const alreadySent = await this.prisma.emailLog.findFirst({
         where: { bookingId: booking.id, type: 'shoot_reminder' },
       });
