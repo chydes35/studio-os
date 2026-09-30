@@ -25,4 +25,9 @@ describe('validateRuntimeConfig', () => {
       'https://preview.example.com',
     ]);
   });
+
+  it('rejects an invalid notification time zone at startup', () => {
+    expect(() => validateRuntimeConfig({ ...validEnv, NOTIFICATION_TIME_ZONE: 'Chicago-ish' }))
+      .toThrow('NOTIFICATION_TIME_ZONE');
+  });
 });

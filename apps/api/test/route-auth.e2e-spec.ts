@@ -45,6 +45,8 @@ const EXPECTED_PUBLIC = [
   'GET /availability/slots/:ownerId',
   'GET /contracts/:id',
   'GET /contracts/:id/download',
+  'GET /health/live',
+  'GET /health/ready',
   'GET /invoices/:id',
   'GET /questionnaire-responses/:id',
   'POST /auth/forgot-password',
@@ -102,5 +104,14 @@ describe('route authorization', () => {
       .get('/clients')
       .set('Authorization', 'Bearer not.a.real.token');
     expect(res.status).toBe(401);
+  });
+
+  it('reports liveness and database readiness without a token', async () => {
+    const live = await request(app.getHttpServer()).get('/health/live');
+    const ready = await request(app.getHttpServer()).get('/health/ready');
+    expect(live.status).toBe(200);
+    expect(ready.status).toBe(200);
+    expect(live.body).toEqual({ status: 'ok' });
+    expect(ready.body).toEqual({ status: 'ok' });
   });
 });

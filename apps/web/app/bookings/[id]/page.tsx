@@ -19,6 +19,7 @@ export default function BookingDetailPage({
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [savingDownloads, setSavingDownloads] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,6 +39,17 @@ export default function BookingDetailPage({
   };
 
   useEffect(load, [id]);
+
+  const hasPendingPreview = gallery?.media.some((m) => m.processingStatus === "pending") ?? false;
+  useEffect(() => {
+    if (!hasPendingPreview) return;
+    const timer = window.setInterval(() => {
+      void api.getGalleryForBooking(id).then((updated) => {
+        if (updated) setGallery(updated);
+      }).catch((err) => setError(String(err)));
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [id, hasPendingPreview]);
 
   async function handleCreateGallery(e: React.FormEvent) {
     e.preventDefault();
@@ -63,6 +75,19 @@ export default function BookingDetailPage({
       setError(String(err));
     } finally {
       setDownloadingId(null);
+    }
+  }
+
+  async function handleRetryPreview(mediaId: string) {
+    setRetryingId(mediaId);
+    setError(null);
+    try {
+      await api.completeUpload(mediaId);
+      setGallery(await api.getGalleryForBooking(id));
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setRetryingId(null);
     }
   }
 
@@ -231,6 +256,15 @@ export default function BookingDetailPage({
                       {downloadingId === m.id ? "…" : "Download"}
                     </button>
                   </div>
+                  {m.processingStatus === "failed" && (
+                    <button
+                      onClick={() => handleRetryPreview(m.id)}
+                      disabled={retryingId === m.id}
+                      className="px-1.5 pb-1.5 text-xs text-amber-700 underline disabled:opacity-50"
+                    >
+                      {retryingId === m.id ? "Retrying…" : "Retry preview"}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

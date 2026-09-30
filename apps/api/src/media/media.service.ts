@@ -4,9 +4,9 @@ import type { AddMediaCommentDto, UploadInitDto, UploadInitResponse } from '@rep
 import { PRISMA } from '../db/db.module.js';
 import { GalleryService } from '../gallery/gallery.service.js';
 import { OwnerContextService } from '../owner/owner-context.service.js';
+import { JobQueueService } from '../jobs/job-queue.service.js';
 import { MuxService } from '../storage/mux.service.js';
 import { StorageService } from '../storage/storage.service.js';
-import { WatermarkService } from '../storage/watermark.service.js';
 
 // Photo uploads go straight to R2 with no transcoding, so they get a tighter
 // cap than video (which Mux handles and enforces its own limits on).
@@ -19,7 +19,7 @@ export class MediaService {
     @Inject(PRISMA) private readonly prisma: PrismaClient,
     private readonly storage: StorageService,
     private readonly mux: MuxService,
-    private readonly watermark: WatermarkService,
+    private readonly jobs: JobQueueService,
     private readonly galleryService: GalleryService,
     private readonly ownerContext: OwnerContextService,
   ) {}
@@ -100,17 +100,17 @@ export class MediaService {
       throw new BadRequestException('Only R2-backed photo uploads use this endpoint');
     }
 
-    const original = await this.storage.getObjectBuffer(media.r2Key);
-    const watermarked = await this.watermark.applyWatermark(original);
-    const previewKey = this.storage.previewKey(media.galleryId, media.id);
-    await this.storage.putObjectBuffer(previewKey, watermarked, 'image/jpeg');
-
-    const updated = await this.prisma.media.update({
-      where: { id: mediaId },
-      data: { previewR2Key: previewKey, processingStatus: 'ready' },
-    });
-
-    return { ...updated, previewUrl: this.storage.publicUrl(previewKey) };
+    if (media.processingStatus === 'ready') {
+      return { ...media, previewUrl: media.previewR2Key ? this.storage.publicUrl(media.previewR2Key) : null };
+    }
+    // The direct-to-storage PUT must finish before a job can be claimed.
+    const size = await this.storage.getObjectSize(media.r2Key);
+    if (!size) throw new BadRequestException('Original upload has not completed');
+    await this.jobs.enqueuePreview(mediaId);
+    if (media.processingStatus === 'failed') {
+      await this.prisma.media.update({ where: { id: mediaId }, data: { processingStatus: 'pending' } });
+    }
+    return { ...media, processingStatus: 'pending', previewUrl: null };
   }
 
   /**

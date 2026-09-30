@@ -1,6 +1,7 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalEnv": ["SENTRY_DSN", "SENTRY_ENVIRONMENT", "NEXT_PUBLIC_SENTRY_DSN", "NEXT_PUBLIC_SENTRY_ENVIRONMENT", "SENTRY_AUTH_TOKEN", "SENTRY_ORG", "SENTRY_PROJECT", "NOTIFICATION_TIME_ZONE", "JOB_CONCURRENCY"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

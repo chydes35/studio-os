@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
+import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller.js';
@@ -11,6 +13,8 @@ import { ContractsModule } from './contracts/contracts.module.js';
 import { DbModule } from './db/db.module.js';
 import { EquipmentModule } from './equipment/equipment.module.js';
 import { GalleryModule } from './gallery/gallery.module.js';
+import { HealthModule } from './health/health.module.js';
+import { JobsModule } from './jobs/jobs.module.js';
 import { LocationsModule } from './locations/locations.module.js';
 import { MediaModule } from './media/media.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
@@ -24,6 +28,7 @@ import { validateRuntimeConfig } from './config/runtime-config.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateRuntimeConfig }),
+    SentryModule.forRoot(),
     ScheduleModule.forRoot(),
     // Before AuthModule so its guard runs first: rejected logins still count.
     RateLimitModule,
@@ -35,15 +40,17 @@ import { validateRuntimeConfig } from './config/runtime-config.js';
     AvailabilityModule,
     BookingsModule,
     GalleryModule,
+    HealthModule,
     MediaModule,
     ContractsModule,
     PaymentsModule,
     QuestionnairesModule,
     NotificationsModule,
+    JobsModule,
     EquipmentModule,
     LocationsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_FILTER, useClass: SentryGlobalFilter }],
 })
 export class AppModule {}

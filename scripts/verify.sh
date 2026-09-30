@@ -26,6 +26,12 @@ run() { # name, command...
   if "$@"; then rows+=("PASS  $name"); else rows+=("FAIL  $name"); summary; exit 1; fi
 }
 
+# Expo normally writes this ignored declaration on first start. A fresh
+# worktree has not started Expo yet, so generate it before the mobile typecheck.
+if [ ! -f apps/mobile/expo-env.d.ts ]; then
+  echo '/// <reference types="expo/types" />' > apps/mobile/expo-env.d.ts
+fi
+
 # Bring up the local backing services if a previous reboot left them stopped. `docker start` never removes anything.
 ensure_services() {
   docker info >/dev/null 2>&1 || { echo "Docker/colima is not running (try: colima start)"; return 1; }

@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import type { PrismaClient } from '@repo/db';
 import request from 'supertest';
 import { Actor, SIGNATURE_PNG, bigJpeg, createTestApp, storageIsUp } from './helpers.js';
+import { JobWorkerService } from '../src/jobs/job-worker.service.js';
+import { PRISMA } from '../src/db/db.module.js';
 
 /** The next Monday at least a week out, as YYYY-MM-DD (the studio is in America/Chicago). */
 function upcomingMonday(): string {
@@ -244,6 +247,24 @@ describe('money paths', () => {
       expect(put.ok).toBe(true);
       const done = await owner.post(`/media/${mediaId}/complete`);
       expect(done.status, done.text).toBe(201);
+      expect(done.body.processingStatus).toBe('pending');
+      expect(done.body.previewUrl).toBeNull();
+      const duplicate = await owner.post(`/media/${mediaId}/complete`);
+      expect(duplicate.status).toBe(201);
+      expect(duplicate.body.processingStatus).toBe('pending');
+      // This shared throwaway DB can contain queued work from earlier e2e
+      // runs. Put this test's job first and drive the real worker until ready.
+      const db = app.get<PrismaClient>(PRISMA);
+      await db.backgroundJob.update({
+        where: { key: `preview:${mediaId}` },
+        data: { availableAt: new Date('2000-01-01T00:00:00Z') },
+      });
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await app.get(JobWorkerService).poll();
+        const current = await db.media.findUnique({ where: { id: mediaId } });
+        if (current?.processingStatus === 'ready') break;
+      }
+      expect((await db.media.findUnique({ where: { id: mediaId } }))?.processingStatus).toBe('ready');
     });
 
     it('serves a watermarked preview only behind the password', async () => {
