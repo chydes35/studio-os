@@ -68,6 +68,7 @@ describe('money paths', () => {
   describe('public booking portal', () => {
     const date = upcomingMonday();
     let slots: string[] = [];
+    let firstBookingId = '';
 
     it('offers slots only after the owner sets working hours', async () => {
       const before = await owner.anon('get', `/availability/slots/${owner.id}?date=${date}&durationMins=60`);
@@ -96,6 +97,7 @@ describe('money paths', () => {
     it('books a slot, then refuses the same slot', async () => {
       const first = await publicRequest(owner.id, slots[0], `pat-${randomUUID()}@e2e.test`, '10.30.0.1');
       expect(first.status).toBe(201);
+      firstBookingId = first.body.id;
       // Confirmation only: nothing about the studio's client records may leak.
       expect(Object.keys(first.body).length).toBeLessThanOrEqual(5);
 
@@ -115,6 +117,24 @@ describe('money paths', () => {
       );
       expect(results.filter((r) => r.status === 201)).toHaveLength(1);
       expect(results.filter((r) => r.status >= 500)).toHaveLength(0);
+    });
+
+    it('only accepts the session lengths the booking page offers', async () => {
+      const oddSlots = await owner.anon('get', `/availability/slots/${owner.id}?date=${date}&durationMins=1`);
+      expect(oddSlots.status).toBe(400);
+
+      const res = await request(app.getHttpServer())
+        .post(`/bookings/public-request/${owner.id}`)
+        .set('X-Forwarded-For', '10.32.0.1')
+        .send({ clientName: 'Pat', clientEmail: `odd-${randomUUID()}@e2e.test`, shootType: 'Portrait', scheduledAt: slots[2], durationMins: 1 });
+      expect(res.status).toBe(400);
+    });
+
+    it('frees the slot again when the owner closes (declines) the request', async () => {
+      const closed = await owner.patch(`/bookings/${firstBookingId}/stage`).send({ stage: 'CLOSED' });
+      expect(closed.status).toBe(200);
+      const res = await owner.anon('get', `/availability/slots/${owner.id}?date=${date}&durationMins=60`);
+      expect(res.body.slots).toContain(slots[0]);
     });
 
     it('404s for an unknown studio', async () => {
