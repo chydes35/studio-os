@@ -53,7 +53,10 @@ export class NotificationsService {
       where: {
         ownerId,
         scheduledAt: { gte: windowStart, lt: windowEnd },
-        stage: { notIn: ['CLOSED'] },
+        // Only confirmed shoots. An INQUIRY is a request the owner hasn't
+        // accepted yet; telling that client "your shoot is in 3 days" would
+        // promise a booking that may never happen.
+        stage: 'BOOKED',
       },
       include: { client: true, owner: true },
     });

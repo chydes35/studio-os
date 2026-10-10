@@ -35,4 +35,21 @@ describe('shoot reminders use the studio calendar day', () => {
     expect(send.mock.calls[0]?.[0].to).toBe('correct-day@e2e.test');
     expect(create).toHaveBeenCalledTimes(1);
   });
+
+  it('only reminds confirmed (BOOKED) shoots, never an unaccepted inquiry', async () => {
+    const findMany = vi.fn(async (_args: { where: { stage?: unknown } }) => []);
+    const db = {
+      booking: { findMany },
+      invoice: { findMany: vi.fn(async () => []) },
+      equipment: { findMany: vi.fn(async () => []) },
+      emailLog: { findFirst: vi.fn(async () => null), create: vi.fn() },
+    };
+    const service = new NotificationsService(
+      db as unknown as PrismaClient,
+      { send: vi.fn() } as unknown as EmailService,
+    );
+
+    await service.runDailyChecks('owner');
+    expect(findMany.mock.calls[0]?.[0].where.stage).toBe('BOOKED');
+  });
 });
