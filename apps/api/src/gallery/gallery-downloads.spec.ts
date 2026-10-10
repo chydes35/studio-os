@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import type { PrismaClient } from '@repo/db';
 import type { OwnerContextService } from '../owner/owner-context.service.js';
 import type { StorageService } from '../storage/storage.service.js';
+import { GalleryPasswordLimiter } from './gallery-password-limiter.js';
 import { GalleryService } from './gallery.service.js';
 
 const PASSWORD = 'galpass1';
@@ -39,6 +40,7 @@ function setup(options: { downloadsEnabled?: boolean; r2Key?: string | null; sta
     prisma as unknown as PrismaClient,
     { getOwnerId: async () => OWNER } as OwnerContextService,
     storage as unknown as StorageService,
+    new GalleryPasswordLimiter(),
   );
   return { prisma, storage, service };
 }
@@ -113,5 +115,30 @@ describe('GalleryService download release', () => {
     } as never);
 
     await expect(service.setDownloadsEnabled('gal_1', true)).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('gallery password guessing', () => {
+  it('locks a client out after 10 wrong passwords, counted across every route', async () => {
+    const { service } = setup({ downloadsEnabled: true });
+    const ip = '203.0.113.7';
+    // Spread the guesses over the routes that each check the password.
+    for (let i = 0; i < 5; i++) {
+      await expect(service.getPublicView('gal_1', `guess-${i}`, ip)).rejects.toThrow(UnauthorizedException);
+      await expect(service.verifyMediaGalleryPassword('media_1', `guess-x${i}`, ip)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    }
+
+    // Now even the right password is refused for this client, on any route.
+    await expect(service.getDownloadUrl('media_1', PASSWORD, ip)).rejects.toSatisfy(
+      (err: { getStatus(): number }) => err.getStatus() === 429,
+    );
+    await expect(service.getPublicView('gal_1', PASSWORD, ip)).rejects.toSatisfy(
+      (err: { getStatus(): number }) => err.getStatus() === 429,
+    );
+
+    // A different client (the real one) is unaffected.
+    await expect(service.getDownloadUrl('media_1', PASSWORD, '198.51.100.2')).resolves.toBeTruthy();
   });
 });
