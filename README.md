@@ -12,50 +12,59 @@ Business management and client portal platform for photographers and videographe
 - `packages/ui` — shared React components
 - `packages/eslint-config`, `packages/typescript-config` — shared tooling config
 
-## Setup
+## Local setup and startup
+
+Use the active SSD checkout at `/Volumes/ExSSD1/Developer/studio-os`. Requirements: Node 24+ (CI uses 26), **npm 11.19.1**, Docker/Colima, and the local services described below. Run commands from the repository root. Install the pinned npm from outside the repository if necessary; its `devEngines` setting rejects other npm versions.
 
 ```bash
-# Local Postgres (docker compose isn't installed on this machine — plain docker run instead)
+npm ci
+npm run setup:local
+npm run dev:local
+```
+
+`setup:local` creates a root `.env` from `.env.example` with a random auth secret only if the file is absent. It preserves an existing `.env`, creates/validates the shared workspace env symlinks, starts existing backing containers, generates Prisma, and applies **`migrate deploy`**. It never seeds, resets, deletes a container, or changes an existing account password. `dev:local` repeats these idempotent checks before starting web (3000) and API (3001).
+
+Additional checks:
+
+```bash
+node scripts/setup-local.mjs --check     # read-only env/link validation
+node scripts/setup-local.mjs --prepare   # env/link creation only; no Docker/DB changes
+bash scripts/verify.sh full              # verification on studio_os_test only
+```
+
+### Backing services on this Mac
+
+The existing `studio_os_postgres` and `studio_os_minio` containers hold persistent studio data. They can be stopped after a reboot. Start Colima if needed (`colima start`); the setup script starts the containers. **Preserve both containers, their cached images, and their volumes.** A missing service makes setup stop with an error rather than silently replacing storage.
+
+For a new local Postgres installation only, create the container once:
+
+```bash
 docker run -d --name studio_os_postgres \
   -e POSTGRES_USER=studio_os -e POSTGRES_PASSWORD=studio_os -e POSTGRES_DB=studio_os \
   -p 5433:5432 -v studio_os_pg_data:/var/lib/postgresql/data postgres:16-alpine
-
-# Local MinIO standing in for Cloudflare R2 (S3-compatible) — see the Media
-# section below for why, and note the image is quay.io/minio/minio, not
-# docker.io/minio/minio (that one now needs a Docker Hub login to pull).
-docker volume create studio_os_minio_data
-docker run -d --name studio_os_minio \
-  -e MINIO_ROOT_USER=studio_os -e MINIO_ROOT_PASSWORD=studio_os_minio \
-  -p 9000:9000 -p 9001:9001 -v studio_os_minio_data:/data \
-  quay.io/minio/minio server /data --console-address ":9001"
-# Then create the bucket once (previews/ public, everything else private):
-docker run --rm --add-host=host.docker.internal:host-gateway --entrypoint sh quay.io/minio/mc \
-  -c "mc alias set local http://host.docker.internal:9000 studio_os studio_os_minio && \
-      mc mb local/studio-os-media && \
-      mc anonymous set download local/studio-os-media/previews"
-
-cp .env.example .env   # already pre-filled with the local DATABASE_URL/R2_* above; add Mux/Stripe/Resend keys when ready
-npm install
-npm run --workspace=@repo/db generate
-npm run --workspace=@repo/db migrate:dev
-npm run --workspace=@repo/db seed   # creates a dev owner + sample clients/bookings
 ```
 
-`.env` is symlinked into `packages/db/.env`, `apps/api/.env`, `apps/web/.env.local`, and `apps/mobile/.env` so every workspace package/app picks up the same values regardless of its own cwd.
+The local MinIO installation uses a cached image which must be preserved; the old public-image bootstrap is no longer a dependable fresh-machine path. For a fresh machine, provision S3-compatible storage separately or configure Cloudflare R2 before continuing. Local scripts expect the existing `studio_os_minio` container when `R2_ENDPOINT` is set. With R2, clear `R2_ENDPOINT`, fill in the account ID/keys/bucket/public URL, and configure browser PUT CORS. Keep `originals/*`, `contracts/*`, and `locations/*` private; expose only `previews/*`. Do not make the entire bucket public. CI uses a disposable SeaweedFS store, not production media storage.
+
+### First account and existing data
+
+After setup, use `/register` to create an account. The sample seed is optional and **only for a new demo database**: it resets the demo owner's password each time it runs. Do not seed the owner's existing database. Use `npm run migrate:deploy --workspace=@repo/db` for subsequent schema updates; never use `migrate:dev`, `migrate reset`, or `db push` on the real studio database.
+
+Password-reset emails require Resend. Failed delivery is reported in logs without exposing the reset link; there is no log-based recovery bypass. Configure and verify the sender before relying on emailed resets. Reminders distinguish Sent, Failed, and Not configured; temporary provider errors are retried up to three times with one idempotency key, and failed/skipped attempts no longer suppress future configured sends. Use **Run checks now** after fixing provider configuration to retry eligible failed notifications.
+
+For deployment, set a strong `AUTH_SECRET`, the real `WEB_APP_URL`, `NEXT_PUBLIC_API_URL` at web build time, explicit `CORS_ORIGINS`, and the appropriate `TRUST_PROXY`. Local container credentials are demo settings, not production credentials. The setup helper deliberately refuses remote Postgres URLs; provision and migrate hosted databases through a separate deployment procedure.
 
 ## Develop
 
-```bash
-npm run dev   # runs web (port 3000) and api (port 3001) together via turbo
-```
+Use `npm run dev:local` for the checked startup path. `npm run dev` remains available when backing services and migrations are already ready.
 
 Log in at `/login` with the seeded dev account (`owner@studio-os.dev` / `devpassword123`, or `/register` your own). Then: `/clients` to add clients, `/bookings` for the Kanban pipeline (drag cards between stages), `/availability` to set working hours and block off time, and `/book/[ownerId]` for the client-facing booking portal (no login — this is what a client sees; find your own link via the "Public booking page" nav item once logged in).
 
 ## Scheduling (Phase 2)
 
 - Owner sets recurring **AvailabilityRule**s (day of week + start/end time + buffer minutes) and one-off **CalendarBlock**s (manual time off) at `/availability`.
-- `GET /availability/slots?date=YYYY-MM-DD&durationMins=60` computes open slots for that date from the matching day's rules, minus existing bookings and calendar blocks (each rule's buffer is applied around candidate slots, not around the busy intervals themselves).
-- The public booking portal (`/book`) lets a client pick a shoot type + slot and submit a request; `POST /bookings/public-request` re-validates the slot is still open server-side (re-running the same slot computation) before creating the client (upserted by `(ownerId, email)`) and booking, to close the race between two clients requesting the same slot.
+- `GET /availability/slots/:ownerId?date=YYYY-MM-DD&durationMins=60` computes open slots for that date from the matching day's rules, minus existing bookings and calendar blocks (each rule's buffer is applied around candidate slots, not around the busy intervals themselves).
+- The public booking portal (`/book/[ownerId]`) lets a client pick a shoot type + slot and submit a request; `POST /bookings/public-request/:ownerId` re-validates the slot is still open server-side (re-running the same slot computation) before creating the client (upserted by `(ownerId, email)`) and booking, to close the race between two clients requesting the same slot.
 - **Google/Apple Calendar sync is not implemented** — it needs a Google Cloud OAuth client (and Apple's CalDAV equivalent), and no such credentials exist yet. `CalendarBlock.source` already has a `"google"` variant reserved in the schema for when that's wired up; until then, all blocks are `"manual"`.
 
 ## Media, galleries & watermarking (Phase 3)
@@ -116,10 +125,10 @@ Real JWT-based auth, replacing Phase 1's single hardcoded owner — and genuinel
 - **Dev login**: `owner@studio-os.dev` / `devpassword123` (seeded — see `packages/db/prisma/seed.ts`, which hardcodes the bcrypt hash of that password so re-running the seed always resets it to a known value).
 - **Secure by default, `@Public()` opts a route out** — `JwtAuthGuard` (`apps/api/src/auth/jwt-auth.guard.ts`) is registered globally via `APP_GUARD`, so a new controller is protected automatically unless explicitly marked otherwise. This is a deliberate reversal from Phase 1–8, where an earlier phase's media-upload endpoints went unauthorized by accident because protection had to be added by hand to each route; opt-out-by-default closes that whole class of bug. The reviewed public-route list is pinned by `apps/api/test/route-auth.e2e-spec.ts`; everything else needs a bearer token.
 - **`OwnerContextService` is now request-scoped** (`apps/api/src/owner/owner-context.service.ts`, `@Injectable({ scope: Scope.REQUEST })`), reading `req.user.id` off the token `JwtAuthGuard` attached to the request, instead of always resolving to one hardcoded seeded row. Every service that injects it becomes request-scoped by extension (normal Nest DI behavior) — a small, accepted perf cost for actual per-request correctness.
-- **The public booking portal needed a real design change, not just a guard**: unlike galleries/contracts/invoices/questionnaires — each already scoped by its own unguessable resource ID, so they never needed to know "which owner" — the booking portal's two endpoints (`GET /availability/slots`, `POST /bookings/public-request`) previously resolved the owner via the same single-hardcoded-user lookup everything else used. With real multi-tenancy that assumption breaks (whose calendar is a stranger asking about?), so both routes now take the owner's id directly in the URL (`GET /availability/slots/:ownerId`, `POST /bookings/public-request/:ownerId`), and the web app's public booking page moved from a flat `/book` to `/book/[ownerId]`. `SlotsService.getAvailableSlots` no longer touches `OwnerContextService` at all — `ownerId` is just a parameter now.
+- **The public booking portal needed a real design change, not just a guard**: unlike galleries/contracts/invoices/questionnaires — each already scoped by its own unguessable resource ID, so they never needed to know "which owner" — the booking portal's two endpoints (`GET /availability/slots`, `POST /bookings/public-request/:ownerId`) previously resolved the owner via the same single-hardcoded-user lookup everything else used. With real multi-tenancy that assumption breaks (whose calendar is a stranger asking about?), so both routes now take the owner's id directly in the URL (`GET /availability/slots/:ownerId`, `POST /bookings/public-request/:ownerId`), and the web app's public booking page moved from a flat `/book` to `/book/[ownerId]`. `SlotsService.getAvailableSlots` no longer touches `OwnerContextService` at all — `ownerId` is just a parameter now.
 - **Web**: token + a cached user object live in `localStorage` (`apps/web/lib/auth.ts`) — the cached user is only for rendering the nav instantly, never trusted for anything security-sensitive; the API always re-derives the owner from the token itself. `AuthGate` (`apps/web/components/AuthGate.tsx`) wraps every page via the root layout and redirects to `/login` for any owner-only route (`isPublicPath()` has an explicit carve-out for `/contracts/templates` and `/questionnaires/templates`, since a naive prefix match would wrongly treat those owner-only pages as public alongside `/contracts/[id]` and `/questionnaires/[id]`). `NavBar` shows the owner's dashboard links + a working "Public booking page" link (now pointing at their own `/book/[ownerId]`) + Log out only when authenticated. A 401 from any request clears the token and bounces to `/login`, covering a token that expires mid-session.
 - **Mobile**: same bearer-token pattern, but token storage needed a platform split — `expo-secure-store`'s web implementation isn't actually functional on this Expo SDK (`ExpoSecureStore.default.getValueWithKeyAsync is not a function`, caught live in the browser tool while verifying login), so `apps/mobile/src/lib/auth.ts` uses real Keychain/Keystore-backed SecureStore on native and falls back to `localStorage` only on web. The whole app is gated (no public/client-facing screens exist on mobile, unlike the web dashboard), and `expo-router`'s standalone `router` singleton is used to redirect on a 401 from outside a component (`api.ts`), not just from the root layout's own check.
-- **Known limitations, not addressed this phase**: no password reset flow; JWTs are stateless with a 7-day expiry and no refresh-token rotation, so logout is purely client-side (deleting the stored token) with no server-side revocation list; the `Role.STAFF` enum value has existed in the schema since Phase 0 but still isn't wired to anything — every registered account is an independent `OWNER` with full access to their own data, there's no "staff member of another owner's studio" concept yet.
+- **Known limitations, not addressed this phase**: JWTs have a 7-day expiry with no refresh-token rotation. Password reset/change and "sign out everywhere" invalidate older sessions through `sessionsValidFrom`; ordinary logout still removes only the local token; the `Role.STAFF` enum value has existed in the schema since Phase 0 but still isn't wired to anything — every registered account is an independent `OWNER` with full access to their own data, there's no "staff member of another owner's studio" concept yet.
 
 ## Why a separate API instead of Next.js API routes
 

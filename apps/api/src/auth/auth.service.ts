@@ -59,8 +59,11 @@ export class AuthService {
    * backend: every account gets its own independent Clients/Bookings/etc.
    */
   async register(dto: RegisterDto): Promise<AuthResponse> {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) throw new ConflictException('An account with this email already exists');
+    const existing = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (existing)
+      throw new ConflictException('An account with this email already exists');
 
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
     const user = await this.prisma.user.create({
@@ -78,7 +81,9 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthResponse> {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (!user) throw new UnauthorizedException('Invalid email or password');
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
@@ -94,7 +99,10 @@ export class AuthService {
    * fresh token so the person doing it isn't signed out of the device they
    * are using.
    */
-  async changePassword(userId: string, dto: ChangePasswordDto): Promise<AuthResponse> {
+  async changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
+  ): Promise<AuthResponse> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
 
@@ -139,7 +147,9 @@ export class AuthService {
    * accounts. The caller is rate-limited separately.
    */
   async requestPasswordReset(dto: ForgotPasswordDto): Promise<{ ok: true }> {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (!user) return { ok: true };
 
     // Any older link stops working the moment a new one is issued.
@@ -162,12 +172,17 @@ export class AuthService {
     const subject = 'Reset your Studio OS password';
     const body = html`<p>Hi ${user.name},</p><p>Use the link below to choose a new password. It expires in one hour and can only be used once. If you didn't ask for this, you can ignore this email — nothing has changed.</p><p><a href="${link}">${link}</a></p>`;
 
-    const result = await this.email.send({ to: user.email, subject, html: body });
+    const result = await this.email.send({
+      to: user.email,
+      subject,
+      html: body,
+    });
     if (!result.delivered) {
-      // Without Resend configured (local dev) nothing is actually sent, so
-      // surface the link rather than making the flow untestable. In
-      // production the send succeeds and this never runs.
-      this.logger.warn(`Password reset email not delivered; link for ${user.email}: ${link}`);
+      // Reset links are credentials. Never put them in logs, including when
+      // a configured provider rejects the email or is temporarily unavailable.
+      this.logger.warn(
+        `Password reset email not delivered for user ${user.id}`,
+      );
     }
     return { ok: true };
   }
@@ -181,27 +196,35 @@ export class AuthService {
       where: { tokenHash: hashResetToken(dto.token) },
     });
     if (!record || record.usedAt || record.expiresAt < new Date()) {
-      throw new BadRequestException('This reset link is invalid or has expired');
+      throw new BadRequestException(
+        'This reset link is invalid or has expired',
+      );
     }
 
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
     const changedAt = new Date();
 
-    await this.prisma.$transaction([
-      // Claim the token: a concurrent second submit finds usedAt already set.
-      this.prisma.passwordResetToken.updateMany({
-        where: { id: record.id, usedAt: null },
+    await this.prisma.$transaction(async (tx) => {
+      // The update takes a row lock. Only its winner may change the password;
+      // a concurrent reader must abort when its conditional claim loses.
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: record.id, usedAt: null, expiresAt: { gt: changedAt } },
         data: { usedAt: changedAt },
-      }),
-      this.prisma.user.update({
+      });
+      if (claimed.count !== 1) {
+        throw new BadRequestException(
+          'This reset link is invalid or has expired',
+        );
+      }
+      await tx.user.update({
         where: { id: record.userId },
         data: { passwordHash, sessionsValidFrom: changedAt },
-      }),
-      this.prisma.passwordResetToken.updateMany({
+      });
+      await tx.passwordResetToken.updateMany({
         where: { userId: record.userId, usedAt: null },
         data: { usedAt: changedAt },
-      }),
-    ]);
+      });
+    });
 
     this.logger.log(`Password reset completed for user ${record.userId}`);
     return { ok: true };

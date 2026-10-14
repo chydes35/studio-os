@@ -2,8 +2,13 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { PrismaClient } from '@repo/db';
 import { PRISMA } from '../db/db.module.js';
 import { addDays, zonedDateStr } from '../availability/zoned-time.js';
-import { formatDateOnly, formatDateTime, html, plainSubject } from './email-html.js';
-import { EmailService } from './email.service.js';
+import {
+  formatDateOnly,
+  formatDateTime,
+  html,
+  plainSubject,
+} from './email-html.js';
+import { EmailService, emailLogStatus } from './email.service.js';
 
 const REMINDER_DAYS_BEFORE = 3;
 const OVERDUE_RESEND_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -46,8 +51,12 @@ export class NotificationsService {
     // Fetch a broad absolute window, then select the local calendar date in
     // each owner's zone. A server-local midnight window misses some studios.
     const dayMs = 24 * 60 * 60 * 1000;
-    const windowStart = new Date(now.getTime() + (REMINDER_DAYS_BEFORE - 1) * dayMs);
-    const windowEnd = new Date(now.getTime() + (REMINDER_DAYS_BEFORE + 1) * dayMs);
+    const windowStart = new Date(
+      now.getTime() + (REMINDER_DAYS_BEFORE - 1) * dayMs,
+    );
+    const windowEnd = new Date(
+      now.getTime() + (REMINDER_DAYS_BEFORE + 1) * dayMs,
+    );
 
     const bookings = await this.prisma.booking.findMany({
       where: {
@@ -63,18 +72,40 @@ export class NotificationsService {
 
     let count = 0;
     for (const booking of bookings) {
-      const reminderDate = addDays(zonedDateStr(now, booking.owner.timezone), REMINDER_DAYS_BEFORE);
-      if (!booking.scheduledAt || zonedDateStr(booking.scheduledAt, booking.owner.timezone) !== reminderDate) continue;
+      const reminderDate = addDays(
+        zonedDateStr(now, booking.owner.timezone),
+        REMINDER_DAYS_BEFORE,
+      );
+      if (
+        !booking.scheduledAt ||
+        zonedDateStr(booking.scheduledAt, booking.owner.timezone) !==
+          reminderDate
+      )
+        continue;
       const alreadySent = await this.prisma.emailLog.findFirst({
-        where: { bookingId: booking.id, type: 'shoot_reminder' },
+        where: {
+          bookingId: booking.id,
+          type: 'shoot_reminder',
+          status: this.deliveredStatuses(),
+        },
       });
       if (alreadySent) continue;
 
       const subject = plainSubject(
         `Reminder: your ${booking.shootType} shoot is in ${REMINDER_DAYS_BEFORE} days`,
       );
-      const body = html`<p>Hi ${booking.client.name},</p><p>Just a reminder that your ${booking.shootType} session is scheduled for ${booking.scheduledAt ? formatDateTime(booking.scheduledAt, booking.owner.timezone) : 'the scheduled time'}. Looking forward to it!</p>`;
-      const result = await this.email.send({ to: booking.client.email, subject, html: body });
+      const body = html`<p>Hi ${booking.client.name},</p>
+        <p>
+          Just a reminder that your ${booking.shootType} session is scheduled
+          for
+          ${booking.scheduledAt ? formatDateTime(booking.scheduledAt, booking.owner.timezone) : 'the scheduled time'}.
+          Looking forward to it!
+        </p>`;
+      const result = await this.email.send({
+        to: booking.client.email,
+        subject,
+        html: body,
+      });
 
       await this.prisma.emailLog.create({
         data: {
@@ -84,7 +115,7 @@ export class NotificationsService {
           recipientEmail: booking.client.email,
           subject,
           body,
-          status: result.delivered ? 'sent' : 'skipped_not_configured',
+          status: emailLogStatus(result),
         },
       });
       count++;
@@ -121,7 +152,10 @@ export class NotificationsService {
           // invoices used to send a reminder for only one of them.
           invoiceId: invoice.id,
           type: 'invoice_overdue',
-          createdAt: { gte: new Date(now.getTime() - OVERDUE_RESEND_INTERVAL_MS) },
+          status: this.deliveredStatuses(),
+          createdAt: {
+            gte: new Date(now.getTime() - OVERDUE_RESEND_INTERVAL_MS),
+          },
         },
       });
       if (recentReminder) continue;
@@ -143,7 +177,7 @@ export class NotificationsService {
           recipientEmail: invoice.booking.client.email,
           subject,
           body,
-          status: result.delivered ? 'sent' : 'skipped_not_configured',
+          status: emailLogStatus(result),
         },
       });
       count++;
@@ -158,7 +192,9 @@ export class NotificationsService {
    * the record (e.g. servicing it and pushing the date out resets the cycle).
    */
   private async checkEquipmentServiceDue(ownerId?: string): Promise<number> {
-    const windowEnd = new Date(Date.now() + SERVICE_DUE_WARNING_DAYS * 24 * 60 * 60 * 1000);
+    const windowEnd = new Date(
+      Date.now() + SERVICE_DUE_WARNING_DAYS * 24 * 60 * 60 * 1000,
+    );
     const dueItems = await this.prisma.equipment.findMany({
       where: { ownerId, nextServiceDue: { lte: windowEnd } },
       include: { owner: true },
@@ -170,19 +206,29 @@ export class NotificationsService {
         where: {
           equipmentId: item.id,
           type: 'equipment_service_due',
+          status: this.deliveredStatuses(),
           createdAt: { gte: item.updatedAt },
         },
       });
       if (alreadyAlerted) continue;
 
       const overdue = item.nextServiceDue! < new Date();
-      const subject = plainSubject(`${overdue ? 'Overdue' : 'Upcoming'} service: ${item.name}`);
-      const body = html`<p>${item.name}${item.serialNumber ? ` (S/N ${item.serialNumber})` : ''} is ${
-        overdue
-          ? 'overdue for service'
-          : `due for service on ${formatDateOnly(item.nextServiceDue!)}`
-      }.</p>`;
-      const result = await this.email.send({ to: item.owner.email, subject, html: body });
+      const subject = plainSubject(
+        `${overdue ? 'Overdue' : 'Upcoming'} service: ${item.name}`,
+      );
+      const body = html`<p>
+        ${item.name}${item.serialNumber ? ` (S/N ${item.serialNumber})` : ''} is
+        ${
+          overdue
+            ? 'overdue for service'
+            : `due for service on ${formatDateOnly(item.nextServiceDue!)}`
+        }.
+      </p>`;
+      const result = await this.email.send({
+        to: item.owner.email,
+        subject,
+        html: body,
+      });
 
       await this.prisma.emailLog.create({
         data: {
@@ -192,12 +238,20 @@ export class NotificationsService {
           recipientEmail: item.owner.email,
           subject,
           body,
-          status: result.delivered ? 'sent' : 'skipped_not_configured',
+          status: emailLogStatus(result),
         },
       });
       count++;
     }
     return count;
+  }
+
+  private deliveredStatuses() {
+    // Avoid filling local logs with repeated unconfigured attempts. Once the
+    // provider is configured, skipped/failed attempts must not suppress sends.
+    return this.email.isConfigured()
+      ? 'sent'
+      : { in: ['sent', 'skipped_not_configured'] };
   }
 
   async listLogs(ownerId: string) {
