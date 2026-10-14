@@ -51,8 +51,10 @@ export default function NotificationsPage() {
       </div>
 
       <p className="mb-4 text-sm text-slate-500">
-        Runs automatically every day at 9am: shoot reminders 3 days out, and overdue-invoice
-        notices. This also runs the same checks on demand.
+        Runs automatically every day at 9am: shoot reminders 3 days out, and
+        overdue-invoice notices. Temporary email failures are retried up to
+        three times. Run checks again to retry failed messages after correcting
+        the provider configuration.
       </p>
 
       {lastResult && (
@@ -80,7 +82,10 @@ export default function NotificationsPage() {
             </thead>
             <tbody>
               {logs.map((log) => (
-                <tr key={log.id} className="border-b border-slate-100 last:border-0">
+                <tr
+                  key={log.id}
+                  className="border-b border-slate-100 last:border-0"
+                >
                   <td className="px-4 py-2 text-slate-500">
                     {new Date(log.createdAt).toLocaleString()}
                   </td>
@@ -90,8 +95,15 @@ export default function NotificationsPage() {
                   <td className="px-4 py-2">
                     {log.status === "sent" ? (
                       <span className="text-green-700">Sent</span>
+                    ) : log.status === "failed" ? (
+                      <span className="text-red-700">
+                        Failed to send — run checks to retry
+                      </span>
                     ) : (
-                      <span className="text-amber-700" title="Resend isn't configured yet">
+                      <span
+                        className="text-amber-700"
+                        title="Resend isn't configured yet"
+                      >
                         Not sent (Resend not configured)
                       </span>
                     )}

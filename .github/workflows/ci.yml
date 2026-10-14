@@ -56,6 +56,11 @@ jobs:
 
       - run: npm ci
 
+      - name: Prepare and validate local environment template
+        run: |
+          node scripts/setup-local.mjs --prepare
+          node scripts/setup-local.mjs --check
+
       - name: Generate Prisma client
         run: npm run generate --workspace=@repo/db
 

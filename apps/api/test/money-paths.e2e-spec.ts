@@ -2,7 +2,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { PrismaClient } from '@repo/db';
 import request from 'supertest';
-import { Actor, SIGNATURE_PNG, bigJpeg, createTestApp, storageIsUp } from './helpers.js';
+import {
+  Actor,
+  SIGNATURE_PNG,
+  bigJpeg,
+  createTestApp,
+  storageIsUp,
+} from './helpers.js';
 import { JobWorkerService } from '../src/jobs/job-worker.service.js';
 import { PRISMA } from '../src/db/db.module.js';
 
@@ -28,6 +34,42 @@ describe('money paths', () => {
   afterAll(() => app.close());
 
   describe('auth', () => {
+    it('allows exactly one concurrent password reset with a single-use token', async () => {
+      const actor = await Actor.register(app, 'reset-race');
+      const token = randomUUID();
+      await app.get<PrismaClient>(PRISMA).passwordResetToken.create({
+        data: {
+          userId: actor.id,
+          tokenHash: createHash('sha256').update(token).digest('hex'),
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      });
+      const passwords = ['first-reset-password', 'second-reset-password'];
+      const results = await Promise.all(
+        passwords.map((password) =>
+          actor.anon('post', '/auth/reset-password').send({ token, password }),
+        ),
+      );
+      expect(
+        results.map((result) => result.status).sort((a, b) => a - b),
+      ).toEqual([201, 400]);
+      const winner = results.findIndex((result) => result.status === 201);
+      expect(
+        (
+          await actor
+            .anon('post', '/auth/login')
+            .send({ email: actor.email, password: passwords[winner] })
+        ).status,
+      ).toBe(201);
+      expect(
+        (
+          await actor
+            .anon('post', '/auth/reset-password')
+            .send({ token, password: 'replayed-password' })
+        ).status,
+      ).toBe(400);
+    });
+
     it('logs in, returns the profile, and rejects a wrong password', async () => {
       const ok = await owner.anon('post', '/auth/login').send({ email: owner.email, password: owner.password });
       expect(ok.status).toBe(201);
@@ -55,7 +97,10 @@ describe('money paths', () => {
       await new Promise((r) => setTimeout(r, 1100));
       const res = await actor
         .post('/auth/change-password')
-        .send({ currentPassword: actor.password, newPassword: 'a brand new password' });
+        .send({
+          currentPassword: actor.password,
+          newPassword: 'a brand new password',
+        });
       expect(res.status).toBe(201);
       await new Promise((r) => setTimeout(r, 50));
       const oldRes = await actor.anon('get', '/auth/me').set('Authorization', `Bearer ${oldToken}`);
@@ -71,16 +116,27 @@ describe('money paths', () => {
     let firstBookingId = '';
 
     it('offers slots only after the owner sets working hours', async () => {
-      const before = await owner.anon('get', `/availability/slots/${owner.id}?date=${date}&durationMins=60`);
+      const before = await owner.anon(
+        'get',
+        `/availability/slots/${owner.id}?date=${date}&durationMins=60`,
+      );
       expect(before.status).toBe(200);
       expect(before.body.slots).toEqual([]);
 
       const rule = await owner
         .post('/availability/rules')
-        .send({ dayOfWeek: 1, startTime: '09:00', endTime: '12:00', bufferMinutes: 0 });
+        .send({
+          dayOfWeek: 1,
+          startTime: '09:00',
+          endTime: '12:00',
+          bufferMinutes: 0,
+        });
       expect(rule.status).toBe(201);
 
-      const after = await owner.anon('get', `/availability/slots/${owner.id}?date=${date}&durationMins=60`);
+      const after = await owner.anon(
+        'get',
+        `/availability/slots/${owner.id}?date=${date}&durationMins=60`,
+      );
       expect(after.body.timezone).toBe('America/Chicago');
       slots = after.body.slots;
       expect(slots).toHaveLength(3);
@@ -88,31 +144,60 @@ describe('money paths', () => {
       expect(new Date(slots[0]).getUTCHours()).not.toBe(9);
     });
 
-    const publicRequest = (ownerId: string, scheduledAt: string, email: string, ip: string) =>
+    const publicRequest = (
+      ownerId: string,
+      scheduledAt: string,
+      email: string,
+      ip: string,
+    ) =>
       request(app.getHttpServer())
         .post(`/bookings/public-request/${ownerId}`)
         .set('X-Forwarded-For', ip)
-        .send({ clientName: 'Pat Public', clientEmail: email, shootType: 'Portrait', scheduledAt, durationMins: 60 });
+        .send({
+          clientName: 'Pat Public',
+          clientEmail: email,
+          shootType: 'Portrait',
+          scheduledAt,
+          durationMins: 60,
+        });
 
     it('books a slot, then refuses the same slot', async () => {
-      const first = await publicRequest(owner.id, slots[0], `pat-${randomUUID()}@e2e.test`, '10.30.0.1');
+      const first = await publicRequest(
+        owner.id,
+        slots[0],
+        `pat-${randomUUID()}@e2e.test`,
+        '10.30.0.1',
+      );
       expect(first.status).toBe(201);
       firstBookingId = first.body.id;
       // Confirmation only: nothing about the studio's client records may leak.
       expect(Object.keys(first.body).length).toBeLessThanOrEqual(5);
 
-      const second = await publicRequest(owner.id, slots[0], `pat2-${randomUUID()}@e2e.test`, '10.30.0.2');
+      const second = await publicRequest(
+        owner.id,
+        slots[0],
+        `pat2-${randomUUID()}@e2e.test`,
+        '10.30.0.2',
+      );
       expect(second.status).toBeGreaterThanOrEqual(400);
       expect(second.status).toBeLessThan(500);
 
-      const left = await owner.anon('get', `/availability/slots/${owner.id}?date=${date}&durationMins=60`);
+      const left = await owner.anon(
+        'get',
+        `/availability/slots/${owner.id}?date=${date}&durationMins=60`,
+      );
       expect(left.body.slots).not.toContain(slots[0]);
     });
 
     it('lets exactly one of many simultaneous requests win a slot', async () => {
       const results = await Promise.all(
         Array.from({ length: 8 }, (_, i) =>
-          publicRequest(owner.id, slots[1], `race-${i}-${randomUUID()}@e2e.test`, `10.31.0.${i + 1}`),
+          publicRequest(
+            owner.id,
+            slots[1],
+            `race-${i}-${randomUUID()}@e2e.test`,
+            `10.31.0.${i + 1}`,
+          ),
         ),
       );
       expect(results.filter((r) => r.status === 201)).toHaveLength(1);
@@ -120,25 +205,42 @@ describe('money paths', () => {
     });
 
     it('only accepts the session lengths the booking page offers', async () => {
-      const oddSlots = await owner.anon('get', `/availability/slots/${owner.id}?date=${date}&durationMins=1`);
+      const oddSlots = await owner.anon(
+        'get',
+        `/availability/slots/${owner.id}?date=${date}&durationMins=1`,
+      );
       expect(oddSlots.status).toBe(400);
 
       const res = await request(app.getHttpServer())
         .post(`/bookings/public-request/${owner.id}`)
         .set('X-Forwarded-For', '10.32.0.1')
-        .send({ clientName: 'Pat', clientEmail: `odd-${randomUUID()}@e2e.test`, shootType: 'Portrait', scheduledAt: slots[2], durationMins: 1 });
+        .send({
+          clientName: 'Pat',
+          clientEmail: `odd-${randomUUID()}@e2e.test`,
+          shootType: 'Portrait',
+          scheduledAt: slots[2],
+          durationMins: 1,
+        });
       expect(res.status).toBe(400);
     });
 
     it('frees the slot again when the owner closes (declines) the request', async () => {
       const closed = await owner.patch(`/bookings/${firstBookingId}/stage`).send({ stage: 'CLOSED' });
       expect(closed.status).toBe(200);
-      const res = await owner.anon('get', `/availability/slots/${owner.id}?date=${date}&durationMins=60`);
+      const res = await owner.anon(
+        'get',
+        `/availability/slots/${owner.id}?date=${date}&durationMins=60`,
+      );
       expect(res.body.slots).toContain(slots[0]);
     });
 
     it('404s for an unknown studio', async () => {
-      const res = await publicRequest('does-not-exist', slots[2], 'x@e2e.test', '10.30.0.9');
+      const res = await publicRequest(
+        'does-not-exist',
+        slots[2],
+        'x@e2e.test',
+        '10.30.0.9',
+      );
       expect(res.status).toBe(404);
     });
   });
@@ -156,10 +258,16 @@ describe('money paths', () => {
     it('renders the template into a snapshot the template can no longer change', async () => {
       const tpl = await owner
         .post('/contract-templates')
-        .send({ name: 'Std', bodyMarkdown: 'Client {{client_name}} pays {{price}}.' });
+        .send({
+          name: 'Std',
+          bodyMarkdown: 'Client {{client_name}} pays {{price}}.',
+        });
       const created = await owner
         .post(`/bookings/${bookingId}/contract`)
-        .send({ templateId: tpl.body.id, variables: { client_name: 'Sam Signer', price: '$500' } });
+        .send({
+          templateId: tpl.body.id,
+          variables: { client_name: 'Sam Signer', price: '$500' },
+        });
       expect(created.status).toBe(201);
       contractId = created.body.id;
 
@@ -213,13 +321,23 @@ describe('money paths', () => {
       });
       expect(created.status).toBe(201);
       invoiceId = created.body.id;
-      expect(created.body).toMatchObject({ status: 'DRAFT', totalCents: 35000, paidCents: 0 });
+      expect(created.body).toMatchObject({
+        status: 'DRAFT',
+        totalCents: 35000,
+        paidCents: 0,
+      });
 
       const sent = await owner.patch(`/invoices/${invoiceId}/send`);
       expect(sent.body.status).toBe('SENT');
 
-      const partial = await owner.post(`/invoices/${invoiceId}/mark-paid`).send({ amountCents: 10000 });
-      expect(partial.body).toMatchObject({ status: 'PARTIALLY_PAID', paidCents: 10000, balanceCents: 25000 });
+      const partial = await owner
+        .post(`/invoices/${invoiceId}/mark-paid`)
+        .send({ amountCents: 10000 });
+      expect(partial.body).toMatchObject({
+        status: 'PARTIALLY_PAID',
+        paidCents: 10000,
+        balanceCents: 25000,
+      });
 
       const rest = await owner.post(`/invoices/${invoiceId}/mark-paid`).send({ amountCents: 25000 });
       expect(rest.body).toMatchObject({ status: 'PAID', balanceCents: 0 });
@@ -229,7 +347,10 @@ describe('money paths', () => {
       const view = await owner.anon('get', `/invoices/${invoiceId}`);
       expect(view.status).toBe(200);
       expect(view.body.stripeConfigured).toBe(false);
-      const checkout = await owner.anon('post', `/invoices/${invoiceId}/checkout`);
+      const checkout = await owner.anon(
+        'post',
+        `/invoices/${invoiceId}/checkout`,
+      );
       expect(checkout.status).toBe(400);
     });
 
@@ -263,7 +384,10 @@ describe('money paths', () => {
       });
       expect(init.status).toBe(201);
       mediaId = init.body.mediaId;
-      const put = await fetch(init.body.uploadUrl, { method: 'PUT', body: new Uint8Array(original) });
+      const put = await fetch(init.body.uploadUrl, {
+        method: 'PUT',
+        body: new Uint8Array(original),
+      });
       expect(put.ok).toBe(true);
       const done = await owner.post(`/media/${mediaId}/complete`);
       expect(done.status, done.text).toBe(201);
@@ -284,7 +408,10 @@ describe('money paths', () => {
         const current = await db.media.findUnique({ where: { id: mediaId } });
         if (current?.processingStatus === 'ready') break;
       }
-      expect((await db.media.findUnique({ where: { id: mediaId } }))?.processingStatus).toBe('ready');
+      expect(
+        (await db.media.findUnique({ where: { id: mediaId } }))
+          ?.processingStatus,
+      ).toBe('ready');
     });
 
     it('serves a watermarked preview only behind the password', async () => {
@@ -295,7 +422,9 @@ describe('money paths', () => {
       const view = await owner.anon('post', `/gallery/${galleryId}/view`).send({ password });
       expect(view.status).toBe(201);
       expect(view.body.media).toHaveLength(1);
-      const preview = Buffer.from(await (await fetch(view.body.media[0].previewUrl)).arrayBuffer());
+      const preview = Buffer.from(
+        await (await fetch(view.body.media[0].previewUrl)).arrayBuffer(),
+      );
       expect(preview.length).toBeGreaterThan(0);
       expect(preview.equals(original)).toBe(false);
     });
@@ -308,11 +437,19 @@ describe('money paths', () => {
       const wrongPw = await owner.anon('post', `/media/${mediaId}/download`).send({ password: 'nope' });
       expect(wrongPw.status).toBe(401);
 
-      expect((await owner.patch(`/gallery/${galleryId}/downloads`).send({ enabled: true })).status).toBe(200);
+      expect(
+        (
+          await owner
+            .patch(`/gallery/${galleryId}/downloads`)
+            .send({ enabled: true })
+        ).status,
+      ).toBe(200);
 
       const after = await owner.anon('post', `/media/${mediaId}/download`).send({ password });
       expect(after.status).toBe(201);
-      const bytes = Buffer.from(await (await fetch(after.body.url)).arrayBuffer());
+      const bytes = Buffer.from(
+        await (await fetch(after.body.url)).arrayBuffer(),
+      );
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(
         createHash('sha256').update(original).digest('hex'),
       );
