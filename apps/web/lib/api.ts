@@ -26,6 +26,8 @@ import type {
   SignContractDto,
   UpdateEquipmentDto,
   UpdateLocationDto,
+  UpdateBookingDto,
+  UpdateClientDto,
   UpdateProfileDto,
   UploadInitResponse,
 } from "@repo/shared";
@@ -51,6 +53,8 @@ export type Booking = {
   shootType: string;
   stage: BookingStage;
   scheduledAt: string | null;
+  durationMins: number | null;
+  notes: string | null;
   createdAt: string;
 };
 
@@ -286,6 +290,8 @@ export const api = {
   listClients: () => request<Client[]>("/clients"),
   createClient: (dto: CreateClientDto) =>
     request<Client>("/clients", { method: "POST", body: JSON.stringify(dto) }),
+  updateClient: (id: string, dto: UpdateClientDto) =>
+    request<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(dto) }),
 
   listBookings: () => request<Booking[]>("/bookings"),
   createBooking: (dto: CreateBookingDto) =>
@@ -297,6 +303,11 @@ export const api = {
     request<Booking>(`/bookings/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ stage }),
+    }),
+  updateBooking: (id: string, dto: UpdateBookingDto) =>
+    request<Booking>(`/bookings/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(dto),
     }),
   createPublicBookingRequest: (ownerId: string, dto: PublicBookingRequestDto) =>
     request<Booking>(`/bookings/public-request/${ownerId}`, {
@@ -327,6 +338,11 @@ export const api = {
     request<AvailableSlotsResponse>(
       `/availability/slots/${ownerId}?date=${date}&durationMins=${durationMins}`,
     ),
+  getOwnerAvailableSlots: (date: string, durationMins: number, excludeBookingId?: string) => {
+    const query = new URLSearchParams({ date, durationMins: String(durationMins) });
+    if (excludeBookingId) query.set("excludeBookingId", excludeBookingId);
+    return request<AvailableSlotsResponse>(`/availability/owner-slots?${query}`);
+  },
 
   createGallery: (bookingId: string, password: string) =>
     request<Gallery>(`/bookings/${bookingId}/gallery`, {

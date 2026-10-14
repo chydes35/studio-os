@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { createClientSchema } from '@repo/shared';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { createClientSchema, updateClientSchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { ClientsService } from './clients.service.js';
 
@@ -23,5 +23,14 @@ export class ClientsController {
     body: ReturnType<typeof createClientSchema.parse>,
   ) {
     return this.clientsService.create(body);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateClientSchema))
+    body: ReturnType<typeof updateClientSchema.parse>,
+  ) {
+    return this.clientsService.update(id, body);
   }
 }

@@ -103,6 +103,8 @@ describe('tenant isolation', () => {
   it("B cannot change or attach to A's records", async () => {
     const attempts: [string, () => Promise<{ status: number; text: string }>][] = [
       ['stage', () => b.patch(`/bookings/${ids.booking}/stage`).send({ stage: 'CLOSED' })],
+      ['edit A booking', () => b.patch(`/bookings/${ids.booking}`).send({ shootType: 'hijacked' })],
+      ['edit A client', () => b.patch(`/clients/${ids.client}`).send({ name: 'hijacked' })],
       ['booking location', () => b.patch(`/bookings/${ids.booking}/location`).send({ locationId: null })],
       ['create booking on A client', () => b.post('/bookings').send({ clientId: ids.client, shootType: 'x' })],
       ['create booking at A location', async () => {
@@ -144,6 +146,10 @@ describe('tenant isolation', () => {
 
     const booking = await a.get(`/bookings/${ids.booking}`);
     expect(booking.body.stage).not.toBe('CLOSED');
+    expect(booking.body.shootType).toBe('Wedding');
+
+    const client = await a.get(`/clients/${ids.client}`);
+    expect(client.body.name).toBe('Client A');
 
     expect((await a.get('/equipment')).body).toHaveLength(1);
     expect((await a.get('/equipment')).body[0].name).toBe('Camera');

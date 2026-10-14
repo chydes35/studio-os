@@ -26,16 +26,44 @@ export const createClientSchema = z.object({
   notes: z.string().optional(),
 });
 export type CreateClientDto = z.infer<typeof createClientSchema>;
+export const updateClientSchema = createClientSchema.partial().extend({
+  phone: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+});
+export type UpdateClientDto = z.infer<typeof updateClientSchema>;
 
 export const createBookingSchema = z.object({
   clientId: z.string().min(1),
   shootType: z.string().min(1),
   locationId: z.string().optional(),
   scheduledAt: z.coerce.date().optional(),
-  durationMins: z.number().int().positive().optional(),
-  notes: z.string().optional(),
+  durationMins: z.number().int().min(30).max(120).multipleOf(30).optional(),
+  notes: z.string().max(5000).optional(),
+}).refine((value) => !value.scheduledAt || value.durationMins !== undefined, {
+  message: "durationMins is required when a booking is scheduled",
+  path: ["durationMins"],
+}).refine((value) => value.scheduledAt !== undefined || value.durationMins === undefined, {
+  message: "durationMins requires a scheduled time",
+  path: ["durationMins"],
 });
 export type CreateBookingDto = z.infer<typeof createBookingSchema>;
+
+export const updateBookingSchema = z.object({
+  clientId: z.string().min(1).optional(),
+  shootType: z.string().trim().min(1).optional(),
+  scheduledAt: z.coerce.date().nullable().optional(),
+  durationMins: z.number().int().min(30).max(120).multipleOf(30).nullable().optional(),
+  notes: z.string().max(5000).nullable().optional(),
+}).refine((value) => {
+  if (value.scheduledAt === null) return value.durationMins === undefined || value.durationMins === null;
+  if (value.scheduledAt instanceof Date) return value.durationMins !== undefined && value.durationMins !== null;
+  return value.durationMins === undefined;
+}, {
+  message: "scheduledAt and durationMins must be updated together",
+  path: ["scheduledAt"],
+});
+export type UpdateBookingDto = z.infer<typeof updateBookingSchema>;
 
 export const updateBookingStageSchema = z.object({
   stage: bookingStageSchema,
@@ -121,6 +149,11 @@ export const availableSlotsQuerySchema = z.object({
     .default(60),
 });
 export type AvailableSlotsQuery = z.infer<typeof availableSlotsQuerySchema>;
+
+export const ownerAvailableSlotsQuerySchema = availableSlotsQuerySchema.extend({
+  excludeBookingId: z.string().min(1).optional(),
+});
+export type OwnerAvailableSlotsQuery = z.infer<typeof ownerAvailableSlotsQuerySchema>;
 
 export const publicBookingRequestSchema = z.object({
   clientName: z.string().min(1),

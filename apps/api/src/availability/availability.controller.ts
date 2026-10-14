@@ -3,6 +3,7 @@ import {
   availableSlotsQuerySchema,
   createAvailabilityRuleSchema,
   createCalendarBlockSchema,
+  ownerAvailableSlotsQuerySchema,
 } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
@@ -39,6 +40,14 @@ export class AvailabilityController {
   @Get('blocks')
   listBlocks() {
     return this.availabilityService.listBlocks();
+  }
+
+  @Get('owner-slots')
+  getOwnerSlots(
+    @Query(new ZodValidationPipe(ownerAvailableSlotsQuerySchema))
+    query: ReturnType<typeof ownerAvailableSlotsQuerySchema.parse>,
+  ) {
+    return this.availabilityService.getOwnerSlots(query);
   }
 
   @Post('blocks')

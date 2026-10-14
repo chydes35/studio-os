@@ -9,6 +9,7 @@ import type {
   BookingStage,
   CreateBookingDto,
   PublicBookingRequestDto,
+  UpdateBookingDto,
 } from '@repo/shared';
 import { PRISMA } from '../db/db.module.js';
 import { OwnerContextService } from '../owner/owner-context.service.js';
@@ -44,25 +45,105 @@ export class BookingsService {
 
   async create(dto: CreateBookingDto) {
     const ownerId = await this.ownerContext.getOwnerId();
+    return this.prisma.$transaction(async (tx) => {
+      if (dto.scheduledAt && dto.durationMins) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ownerId}))`;
+        await this.assertSlotAvailable(
+          tx,
+          ownerId,
+          dto.scheduledAt,
+          dto.durationMins,
+        );
+      }
 
-    // The ids in the body are client-supplied: without these checks an owner
-    // could attach another studio's client/location to their own booking and
-    // read it back through the booking's `include`.
-    const client = await this.prisma.client.findFirst({
-      where: { id: dto.clientId, ownerId },
-    });
-    if (!client) throw new NotFoundException('Client not found');
-    if (dto.locationId) {
-      const location = await this.prisma.location.findFirst({
-        where: { id: dto.locationId, ownerId },
+      // The ids in the body are client-supplied: without these checks an owner
+      // could attach another studio's client/location to their own booking.
+      const client = await tx.client.findFirst({
+        where: { id: dto.clientId, ownerId },
       });
-      if (!location) throw new NotFoundException('Location not found');
-    }
+      if (!client) throw new NotFoundException('Client not found');
+      if (dto.locationId) {
+        const location = await tx.location.findFirst({
+          where: { id: dto.locationId, ownerId },
+        });
+        if (!location) throw new NotFoundException('Location not found');
+      }
 
-    return this.prisma.booking.create({
-      data: { ...dto, ownerId },
-      include: { client: true },
+      return tx.booking.create({
+        data: { ...dto, ownerId },
+        include: { client: true },
+      });
     });
+  }
+
+  async update(id: string, dto: UpdateBookingDto) {
+    const ownerId = await this.ownerContext.getOwnerId();
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.booking.findFirst({ where: { id, ownerId } });
+      if (!current) throw new NotFoundException('Booking not found');
+
+      if (dto.clientId) {
+        const client = await tx.client.findFirst({
+          where: { id: dto.clientId, ownerId },
+          select: { id: true },
+        });
+        if (!client) throw new NotFoundException('Client not found');
+      }
+
+      const data: Prisma.BookingUpdateInput = {};
+      if (dto.clientId !== undefined) data.client = { connect: { id: dto.clientId } };
+      if (dto.shootType !== undefined) data.shootType = dto.shootType;
+      if (dto.notes !== undefined) data.notes = dto.notes;
+
+      if (dto.scheduledAt !== undefined) {
+        if (dto.scheduledAt === null) {
+          data.scheduledAt = null;
+          data.durationMins = null;
+        } else {
+          const durationMins = dto.durationMins;
+          if (durationMins === undefined || durationMins === null) {
+            throw new BadRequestException('Choose a session length');
+          }
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ownerId}))`;
+          await this.assertSlotAvailable(tx, ownerId, dto.scheduledAt, durationMins, id);
+          data.scheduledAt = dto.scheduledAt;
+          data.durationMins = durationMins;
+        }
+      }
+
+      return tx.booking.update({
+        where: { id },
+        data,
+        include: { client: true, location: true },
+      });
+    });
+  }
+
+  private async assertSlotAvailable(
+    tx: Prisma.TransactionClient,
+    ownerId: string,
+    scheduledAt: Date,
+    durationMins: number,
+    excludeBookingId?: string,
+  ) {
+    const owner = await tx.user.findUnique({
+      where: { id: ownerId },
+      select: { timezone: true },
+    });
+    if (!owner) throw new NotFoundException('Studio not found');
+
+    const { slots } = await this.slotsService.getAvailableSlots(
+      ownerId,
+      zonedDateStr(scheduledAt, owner.timezone),
+      durationMins,
+      tx,
+      excludeBookingId,
+    );
+    if (!slots.includes(scheduledAt.toISOString())) {
+      throw new BadRequestException(
+        'That time is outside your availability or conflicts with another booking or calendar block.',
+      );
+    }
   }
 
   /**
@@ -174,14 +255,29 @@ export class BookingsService {
 
   async updateStage(id: string, stage: BookingStage) {
     const ownerId = await this.ownerContext.getOwnerId();
-    const booking = await this.prisma.booking.findFirst({
-      where: { id, ownerId },
-    });
-    if (!booking) throw new NotFoundException('Booking not found');
-    return this.prisma.booking.update({
-      where: { id },
-      data: { stage },
-      include: { client: true },
+    return this.prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findFirst({ where: { id, ownerId } });
+      if (!booking) throw new NotFoundException('Booking not found');
+      if (
+        booking.stage === 'CLOSED' &&
+        stage !== 'CLOSED' &&
+        booking.scheduledAt &&
+        booking.scheduledAt > new Date()
+      ) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ownerId}))`;
+        await this.assertSlotAvailable(
+          tx,
+          ownerId,
+          booking.scheduledAt,
+          booking.durationMins ?? 60,
+          id,
+        );
+      }
+      return tx.booking.update({
+        where: { id },
+        data: { stage },
+        include: { client: true, location: true },
+      });
     });
   }
 
