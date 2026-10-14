@@ -76,7 +76,7 @@ describe('tenant isolation', () => {
   afterAll(() => app.close());
 
   it("B's lists never include A's records", async () => {
-    for (const path of ['/clients', '/bookings', '/equipment', '/locations', '/expenses', '/contract-templates', '/questionnaire-templates']) {
+    for (const path of ['/clients', '/bookings', '/equipment', '/locations', '/expenses', '/contract-templates', '/questionnaire-templates', '/invoices/open']) {
       const res = await b.get(path);
       expect(res.status, path).toBe(200);
       expect(res.body, path).toEqual([]);
@@ -143,6 +143,11 @@ describe('tenant isolation', () => {
     expect(invoice.body).toHaveLength(1);
     expect(invoice.body[0].status).toBe('DRAFT');
     expect(invoice.body[0].paidCents).toBe(0);
+
+    const openInvoices = await a.get('/invoices/open');
+    expect(openInvoices.body).toHaveLength(1);
+    expect(openInvoices.body[0].booking.client.name).toBe('Client A');
+    expect(openInvoices.body[0].balanceCents).toBe(10_000);
 
     const booking = await a.get(`/bookings/${ids.booking}`);
     expect(booking.body.stage).not.toBe('CLOSED');

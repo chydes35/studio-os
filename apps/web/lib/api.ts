@@ -204,6 +204,10 @@ export type Invoice = {
   createdAt: string;
 };
 
+export type OpenInvoice = Invoice & {
+  booking: Pick<Booking, 'id' | 'shootType'> & { client: Pick<Client, 'name'> };
+};
+
 export type PublicInvoice = {
   id: string;
   status: InvoiceStatus;
@@ -447,6 +451,7 @@ export const api = {
     }),
   listInvoicesForBooking: (bookingId: string) =>
     request<Invoice[]>(`/bookings/${bookingId}/invoices`),
+  listOpenInvoices: () => request<OpenInvoice[]>('/invoices/open'),
   markInvoiceSent: (id: string) =>
     request<Invoice>(`/invoices/${id}/send`, { method: "PATCH" }),
   markInvoicePaid: (id: string, amountCents: number) =>

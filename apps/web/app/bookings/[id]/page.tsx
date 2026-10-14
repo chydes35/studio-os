@@ -9,6 +9,7 @@ import { BookingLocationSection } from "./BookingLocationSection";
 import { BookingQuestionnaireSection } from "./BookingQuestionnaireSection";
 import { BookingEditor } from "./BookingEditor";
 import type { BookingStage } from "@repo/shared";
+import { CopyLinkButton } from "../../../components/CopyLinkButton";
 
 export default function BookingDetailPage({
   params,
@@ -155,8 +156,13 @@ export default function BookingDetailPage({
     <div className="grid gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">{booking.client.name}</h1>
-          <p className="text-sm text-slate-500">{booking.shootType}</p>
+          <h1 className="text-xl font-semibold">Job overview</h1>
+          <p className="text-sm text-slate-600">
+            {booking.client.name} · {booking.shootType}
+            {booking.scheduledAt && (
+              <> · {new Date(booking.scheduledAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</>
+            )}
+          </p>
         </div>
         <div className="flex items-end gap-2">
           <label className="grid gap-1 text-xs text-slate-500">Booking stage
@@ -219,6 +225,7 @@ export default function BookingDetailPage({
           <div className="rounded-lg border border-slate-200 bg-white p-4">
             <p className="text-sm font-semibold">Share with your client</p>
             <p className="mt-1 break-all text-sm text-slate-600">{galleryUrl}</p>
+            <div className="mt-2"><CopyLinkButton value={galleryUrl} /></div>
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-4">

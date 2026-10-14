@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type Invoice } from "../../../lib/api";
 import { dollarsToCents, formatCents } from "../../../lib/format";
+import { CopyLinkButton } from "../../../components/CopyLinkButton";
 
 type LineItemForm = { description: string; quantity: string; unitPrice: string };
 
@@ -86,6 +87,9 @@ export function BookingInvoicesSection({ bookingId }: { bookingId: string }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <h2 className="text-sm font-semibold">Invoices</h2>
+      <p className="mt-1 text-xs text-slate-500">
+        “Mark sent” records the status here; it does not email the invoice.
+      </p>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
       {invoices.length > 0 && (
@@ -105,6 +109,7 @@ export function BookingInvoicesSection({ bookingId }: { bookingId: string }) {
                   Paid {formatCents(inv.paidCents)} · Balance {formatCents(inv.balanceCents)}
                 </p>
                 <p className="mt-1 break-all text-xs text-slate-400">{invoiceUrl}</p>
+                <div className="mt-2"><CopyLinkButton value={invoiceUrl} label="Copy invoice link" /></div>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {inv.status === "DRAFT" && (
                     <button

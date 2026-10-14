@@ -6,6 +6,7 @@ import {
   type QuestionnaireResponse,
   type QuestionnaireTemplate,
 } from "../../../lib/api";
+import { CopyLinkButton } from "../../../components/CopyLinkButton";
 
 export function BookingQuestionnaireSection({ bookingId }: { bookingId: string }) {
   const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([]);
@@ -72,6 +73,7 @@ export function BookingQuestionnaireSection({ bookingId }: { bookingId: string }
                   </span>
                 </div>
                 <p className="mt-1 break-all text-xs text-slate-400">{url}</p>
+                <div className="mt-2"><CopyLinkButton value={url} label="Copy questionnaire link" /></div>
               </div>
             );
           })}

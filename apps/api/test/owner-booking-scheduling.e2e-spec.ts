@@ -23,17 +23,15 @@ describe('owner booking scheduling', () => {
     });
     expect(client.status).toBe(201);
     clientId = client.body.id;
-    const rules = await Promise.all(
-      Array.from({ length: 7 }, (_, dayOfWeek) =>
-        owner.post('/availability/rules').send({
-          dayOfWeek,
-          startTime: '08:00',
-          endTime: '17:00',
-          bufferMinutes: 0,
-        }),
-      ),
-    );
-    expect(rules.every((response) => response.status === 201)).toBe(true);
+    for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek += 1) {
+      const rule = await owner.post('/availability/rules').send({
+        dayOfWeek,
+        startTime: '08:00',
+        endTime: '17:00',
+        bufferMinutes: 0,
+      });
+      expect(rule.status).toBe(201);
+    }
   });
 
   afterAll(() => app.close());
