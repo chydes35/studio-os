@@ -2,7 +2,7 @@ import type { PrismaClient } from '@repo/db';
 import { SlotsService } from './slots.service.js';
 
 type Rule = { dayOfWeek: number; startTime: string; endTime: string; bufferMinutes: number };
-type Booking = { scheduledAt: Date; durationMins: number | null };
+type Booking = { scheduledAt: Date; durationMins: number | null; stage?: string };
 
 function service(opts: { timezone: string; rules: Rule[]; bookings?: Booking[] }) {
   const db = {
@@ -11,7 +11,11 @@ function service(opts: { timezone: string; rules: Rule[]; bookings?: Booking[] }
       findMany: async ({ where }: { where: { dayOfWeek: number } }) =>
         opts.rules.filter((r) => r.dayOfWeek === where.dayOfWeek),
     },
-    booking: { findMany: async () => opts.bookings ?? [] },
+    booking: {
+      // Honors the stage filter the way Postgres would, so a missing filter shows up as a failure.
+      findMany: async ({ where }: { where: { stage?: { not?: string } } }) =>
+        (opts.bookings ?? []).filter((b) => !where.stage?.not || (b.stage ?? 'BOOKED') !== where.stage.not),
+    },
     calendarBlock: { findMany: async () => [] },
   };
   return new SlotsService(db as unknown as PrismaClient);
@@ -63,5 +67,20 @@ describe('SlotsService', () => {
 
     // Only 2am and 3am Chicago (07:00Z, 08:00Z) are free.
     expect(result).toEqual(['2026-09-28T07:00:00.000Z', '2026-09-28T08:00:00.000Z']);
+  });
+
+  it('frees the time of a CLOSED (declined or cancelled) booking', async () => {
+    const at = new Date('2026-09-28T22:00:00Z'); // 5pm Chicago
+    const make = (stage: string) =>
+      service({
+        timezone: 'America/Chicago',
+        rules: [{ dayOfWeek: 1, startTime: '17:00', endTime: '18:00', bufferMinutes: 0 }],
+        bookings: [{ scheduledAt: at, durationMins: 60, stage }],
+      });
+
+    expect((await make('INQUIRY').getAvailableSlots('owner', MONDAY, 60)).slots).toEqual([]);
+    expect((await make('CLOSED').getAvailableSlots('owner', MONDAY, 60)).slots).toEqual([
+      at.toISOString(),
+    ]);
   });
 });

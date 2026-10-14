@@ -369,7 +369,7 @@ export const api = {
   completeUpload: (mediaId: string) =>
     request<Media>(`/media/${mediaId}/complete`, { method: "POST" }),
   toggleFavorite: (mediaId: string, password: string) =>
-    request<Media>(`/media/${mediaId}/favorite`, {
+    request<Pick<Media, "id" | "isFavorited">>(`/media/${mediaId}/favorite`, {
       method: "POST",
       body: JSON.stringify({ password }),
     }),

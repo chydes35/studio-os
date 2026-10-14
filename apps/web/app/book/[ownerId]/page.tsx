@@ -1,9 +1,10 @@
 "use client";
 
 import { use, useState } from "react";
+import { PUBLIC_BOOKING_DURATIONS } from "@repo/shared";
 import { api } from "../../../lib/api";
 
-const DURATIONS = [30, 60, 90, 120];
+const DURATIONS = PUBLIC_BOOKING_DURATIONS;
 
 function todayStr() {
   const d = new Date();

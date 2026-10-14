@@ -11,6 +11,7 @@ import type { PrismaClient } from '@repo/db';
 import { PRISMA } from '../db/db.module.js';
 import { OwnerContextService } from '../owner/owner-context.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { GalleryPasswordLimiter } from './gallery-password-limiter.js';
 
 @Injectable()
 export class GalleryService {
@@ -18,6 +19,7 @@ export class GalleryService {
     @Inject(PRISMA) private readonly prisma: PrismaClient,
     private readonly ownerContext: OwnerContextService,
     private readonly storage: StorageService,
+    private readonly passwordLimiter: GalleryPasswordLimiter,
   ) {}
 
   async createForBooking(bookingId: string, password: string) {
@@ -60,18 +62,27 @@ export class GalleryService {
     };
   }
 
-  private async verifyPassword(galleryId: string, password: string) {
+  /**
+   * Every client action re-sends the password, so this is the single place
+   * guesses are counted (see GalleryPasswordLimiter).
+   */
+  private async verifyPassword(galleryId: string, password: string, clientIp: string) {
     const gallery = await this.prisma.gallery.findUnique({
       where: { id: galleryId },
     });
     if (!gallery) throw new NotFoundException('Gallery not found');
+    this.passwordLimiter.assertAllowed(galleryId, clientIp);
     const valid = await bcrypt.compare(password, gallery.passwordHash);
-    if (!valid) throw new UnauthorizedException('Incorrect password');
+    if (!valid) {
+      this.passwordLimiter.recordFailure(galleryId, clientIp);
+      throw new UnauthorizedException('Incorrect password');
+    }
+    this.passwordLimiter.recordSuccess(galleryId, clientIp);
     return gallery;
   }
 
-  async getPublicView(galleryId: string, password: string) {
-    const gallery = await this.verifyPassword(galleryId, password);
+  async getPublicView(galleryId: string, password: string, clientIp = 'unknown') {
+    const gallery = await this.verifyPassword(galleryId, password, clientIp);
     const media = await this.prisma.media.findMany({
       where: { galleryId: gallery.id, processingStatus: 'ready' },
       include: { comments: { orderBy: { createdAt: 'asc' } } },
@@ -117,13 +128,13 @@ export class GalleryService {
    * downloads for this gallery — the previews are watermarked precisely so
    * the originals stay withheld until then.
    */
-  async getDownloadUrl(mediaId: string, password: string) {
+  async getDownloadUrl(mediaId: string, password: string, clientIp = 'unknown') {
     const media = await this.prisma.media.findUnique({
       where: { id: mediaId },
       include: { gallery: true },
     });
     if (!media) throw new NotFoundException('Media not found');
-    await this.verifyPassword(media.galleryId, password);
+    await this.verifyPassword(media.galleryId, password, clientIp);
 
     if (!media.gallery.downloadsEnabled) {
       throw new ForbiddenException(
@@ -142,10 +153,10 @@ export class GalleryService {
     return { url, fileName, sizeBytes };
   }
 
-  async verifyMediaGalleryPassword(mediaId: string, password: string) {
+  async verifyMediaGalleryPassword(mediaId: string, password: string, clientIp = 'unknown') {
     const media = await this.prisma.media.findUnique({ where: { id: mediaId } });
     if (!media) throw new NotFoundException('Media not found');
-    await this.verifyPassword(media.galleryId, password);
+    await this.verifyPassword(media.galleryId, password, clientIp);
     return media;
   }
 }

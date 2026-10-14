@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Post, Body } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { addMediaCommentSchema, toggleFavoriteSchema, uploadInitSchema } from '@repo/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Public } from '../auth/public.decorator.js';
@@ -36,8 +37,9 @@ export class MediaController {
     @Param('id') id: string,
     @Body(new ZodValidationPipe(toggleFavoriteSchema))
     body: ReturnType<typeof toggleFavoriteSchema.parse>,
+    @Req() req: Request,
   ) {
-    return this.mediaService.toggleFavorite(id, body.password);
+    return this.mediaService.toggleFavorite(id, body.password, req.ip ?? 'unknown');
   }
 
   @Public()
@@ -47,7 +49,8 @@ export class MediaController {
     @Param('id') id: string,
     @Body(new ZodValidationPipe(addMediaCommentSchema))
     body: ReturnType<typeof addMediaCommentSchema.parse>,
+    @Req() req: Request,
   ) {
-    return this.mediaService.addComment(id, body);
+    return this.mediaService.addComment(id, body, req.ip ?? 'unknown');
   }
 }

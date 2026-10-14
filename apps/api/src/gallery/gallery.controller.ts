@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   createGallerySchema,
   downloadMediaSchema,
@@ -47,8 +48,9 @@ export class GalleryController {
     @Param('mediaId') mediaId: string,
     @Body(new ZodValidationPipe(downloadMediaSchema))
     body: ReturnType<typeof downloadMediaSchema.parse>,
+    @Req() req: Request,
   ) {
-    return this.galleryService.getDownloadUrl(mediaId, body.password);
+    return this.galleryService.getDownloadUrl(mediaId, body.password, req.ip ?? 'unknown');
   }
 
   @Public()
@@ -58,7 +60,8 @@ export class GalleryController {
     @Param('galleryId') galleryId: string,
     @Body(new ZodValidationPipe(unlockGallerySchema))
     body: ReturnType<typeof unlockGallerySchema.parse>,
+    @Req() req: Request,
   ) {
-    return this.galleryService.getPublicView(galleryId, body.password);
+    return this.galleryService.getPublicView(galleryId, body.password, req.ip ?? 'unknown');
   }
 }

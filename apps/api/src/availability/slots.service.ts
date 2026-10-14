@@ -55,6 +55,10 @@ export class SlotsService {
       db.booking.findMany({
         where: {
           ownerId,
+          // A CLOSED booking (declined, cancelled or finished) no longer holds
+          // its time. Without this, declining a portal request left its slot
+          // blocked forever, since bookings can't be deleted.
+          stage: { not: 'CLOSED' },
           scheduledAt: {
             gte: new Date(dayStart.getTime() - DAY_MS),
             lt: new Date(dayEnd.getTime() + DAY_MS),

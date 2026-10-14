@@ -101,9 +101,24 @@ export const createCalendarBlockSchema = z
   });
 export type CreateCalendarBlockDto = z.infer<typeof createCalendarBlockSchema>;
 
+/**
+ * Session lengths a client can pick on the public booking page. The API
+ * enforces the same list: it used to accept any positive number, so a client
+ * could request a 1-minute slot (fitting anywhere) or a 10,000-minute one.
+ * Owner-defined packages with their own durations should replace this.
+ */
+export const PUBLIC_BOOKING_DURATIONS = [30, 60, 90, 120] as const;
+const isPublicBookingDuration = (mins: number) =>
+  (PUBLIC_BOOKING_DURATIONS as readonly number[]).includes(mins);
+const publicDurationMessage = `Duration must be one of ${PUBLIC_BOOKING_DURATIONS.join(", ")} minutes`;
+
 export const availableSlotsQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
-  durationMins: z.coerce.number().int().positive().default(60),
+  durationMins: z.coerce
+    .number()
+    .int()
+    .refine(isPublicBookingDuration, publicDurationMessage)
+    .default(60),
 });
 export type AvailableSlotsQuery = z.infer<typeof availableSlotsQuerySchema>;
 
@@ -113,7 +128,7 @@ export const publicBookingRequestSchema = z.object({
   clientPhone: z.string().optional(),
   shootType: z.string().min(1),
   scheduledAt: z.coerce.date(),
-  durationMins: z.number().int().positive(),
+  durationMins: z.number().int().refine(isPublicBookingDuration, publicDurationMessage),
   notes: z.string().optional(),
 });
 export type PublicBookingRequestDto = z.infer<

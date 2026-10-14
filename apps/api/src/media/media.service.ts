@@ -142,16 +142,19 @@ export class MediaService {
     return { url, fileName, sizeBytes };
   }
 
-  async toggleFavorite(mediaId: string, password: string) {
-    const media = await this.galleryService.verifyMediaGalleryPassword(mediaId, password);
+  async toggleFavorite(mediaId: string, password: string, clientIp = 'unknown') {
+    const media = await this.galleryService.verifyMediaGalleryPassword(mediaId, password, clientIp);
+    // Public route: return only what the client needs, not the row (which
+    // carries private storage keys and Mux ids).
     return this.prisma.media.update({
       where: { id: mediaId },
       data: { isFavorited: !media.isFavorited },
+      select: { id: true, isFavorited: true },
     });
   }
 
-  async addComment(mediaId: string, dto: AddMediaCommentDto) {
-    await this.galleryService.verifyMediaGalleryPassword(mediaId, dto.password);
+  async addComment(mediaId: string, dto: AddMediaCommentDto, clientIp = 'unknown') {
+    await this.galleryService.verifyMediaGalleryPassword(mediaId, dto.password, clientIp);
     return this.prisma.comment.create({
       data: {
         mediaId,
