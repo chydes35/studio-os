@@ -32,6 +32,28 @@ node scripts/setup-local.mjs --prepare   # env/link creation only; no Docker/DB 
 bash scripts/verify.sh full              # verification on studio_os_test only
 ```
 
+### Backup and restore
+
+Create backups on a different physical drive from the working database. The local tools require explicit database, bucket, and backup path; they accept local Postgres and MinIO endpoints only, so this command cannot silently export a hosted database or Cloudflare R2 bucket. A backup contains a compressed Postgres dump, every object in the selected media bucket, and a checksum manifest. The output folder is private (`0700`), its files are private (`0600`), and the chosen path must be outside this repository.
+
+```bash
+npm run backup:local -- \
+  --database studio_os \
+  --bucket studio-os-media \
+  --output /Volumes/BackupDrive/StudioOS/backup-2026-10-14
+```
+
+Restore only targets an empty local database and an empty local media bucket. It never drops a database or overwrites objects. For a recovery drill, restore to new names and smoke-test those copies before changing the app's `.env`:
+
+```bash
+npm run restore:local -- \
+  --backup /Volumes/BackupDrive/StudioOS/backup-2026-10-14 \
+  --database studio_os_restore_test \
+  --bucket studio-os-restore-test
+```
+
+The restore validates every database/media checksum before writing, verifies uploaded media afterward, and leaves any failed partial restore in place for inspection rather than deleting it. If a prior attempt partially populated the target, choose new target names; the tool intentionally has no destructive cleanup option. The app uses `DATABASE_URL` and `R2_BUCKET_NAME`, so to run against a restored copy, point a separate local configuration at both restored targets. `npm run setup:local` remains the repeatable startup path and applies migrations idempotently; it does not seed or reset account data. Hosted Postgres/R2 backup retention, encryption, and recovery are not configured by these local scripts.
+
 ### Backing services on this Mac
 
 The existing `studio_os_postgres` and `studio_os_minio` containers hold persistent studio data. They can be stopped after a reboot. Start Colima if needed (`colima start`); the setup script starts the containers. **Preserve both containers, their cached images, and their volumes.** A missing service makes setup stop with an error rather than silently replacing storage.
@@ -72,7 +94,7 @@ Log in at `/login` with the seeded dev account (`owner@studio-os.dev` / `devpass
 ## Media, galleries & watermarking (Phase 3)
 
 - **R2 in dev is MinIO.** There's no Cloudflare R2 account yet, so `apps/api/src/storage/storage.service.ts` points its S3 SDK client at a local MinIO container instead — same S3 API, so switching to real R2 in prod is just dropping `R2_ENDPOINT` and filling in real `R2_ACCOUNT_ID`/keys, no code change. Bucket layout: `originals/<galleryId>/<mediaId>-<fileName>` (private) and `previews/<galleryId>/<mediaId>.jpg` (public — watermarked, safe to serve directly).
-- **Upload is a single presigned PUT, not chunked multipart.** The browser still uploads directly to storage, bypassing the app server (`apps/web/lib/api.ts`'s `uploadPhoto`). True multipart was dropped for this path: completing an S3 multipart upload requires reading each part's `ETag` back from the browser, which needs the bucket to expose that header via CORS — this local MinIO build's `PutBucketCors` API returns "not implemented," so that path is closed here. Real Cloudflare R2 *does* support CORS `ExposeHeaders`, so multipart could be reinstated later if very large raw files need resumable chunked uploads; for now single PUT is enough for photos, and video (the actual 50GB use case) goes through Mux instead.
+- **Upload is a single presigned PUT, not chunked multipart.** The browser still uploads directly to storage, bypassing the app server (`apps/web/lib/api.ts`'s `uploadPhoto`). True multipart was dropped for this path: completing an S3 multipart upload requires reading each part's `ETag` back from the browser, which needs the bucket to expose that header via CORS — this local MinIO build's `PutBucketCors` API returns "not implemented," so that path is closed here. Real Cloudflare R2 _does_ support CORS `ExposeHeaders`, so multipart could be reinstated later if very large raw files need resumable chunked uploads; for now single PUT is enough for photos, and video (the actual 50GB use case) goes through Mux instead.
 - **Watermarking runs in a durable Postgres queue.** `POST /media/:id/complete` checks that the original exists in storage, enqueues one unique preview job, and returns `processingStatus: "pending"` without fetching photo bytes into the HTTP request. API replicas claim jobs with `FOR UPDATE SKIP LOCKED`; a ten-minute lease and heartbeat let another replica recover after a crash. The worker retries five times, then marks the photo failed so the owner can retry it from the booking page. Concurrency defaults to one photo per API replica (`JOB_CONCURRENCY`, max two) to bound memory, while each poll drains up to 50 jobs per worker slot instead of waiting ten seconds between photos.
 - **Galleries are password-gated but stateless** — there's no session/cookie; the client re-sends the password on every favorite/comment action (`GalleryService.verifyMediaGalleryPassword`) and it's re-checked against the bcrypt hash each time. Simple and correct, just re-hashes more than a real session would; worth revisiting if this becomes a hot path.
 - **Video/Mux is deliberately not wired up** — same treatment as Google Calendar in Phase 2. `MuxService` (`apps/api/src/storage/mux.service.ts`) throws a clear "Mux is not configured" error if `MUX_TOKEN_ID`/`MUX_TOKEN_SECRET` are unset, which is always true right now. The `Media`/`Comment` schema already supports video (`muxAssetId`, `muxPlaybackId`, `timestampSeconds` for scrubber comments) for whenever those credentials exist.
@@ -84,7 +106,7 @@ Log in at `/login` with the seeded dev account (`owner@studio-os.dev` / `devpass
 - Known booking/client fields (`client_name`, `client_email`, `shoot_type`, `shoot_date`) are pre-filled into the variable form automatically; anything else (like `price`) the owner types in by hand since there's no pricing field on `Booking` yet (that's Phase 5/Invoices).
 - The public sign page (`/contracts/[id]`) is a **capability URL** — the contract's own `cuid` is the only access control, no separate password like galleries have. That's an intentional, lighter security model for this object type (matches how DocuSign/HelloSign envelope links work): the link itself, delivered out of band (email), is the credential.
 - E-signature is in-house, not DocuSign/HelloSign: `apps/web/components/SignaturePad.tsx` is an HTML5 canvas capturing a drawn signature as a PNG data URL; signing calls `POST /contracts/:id/sign`, which is guarded against re-signing (409 if `signedAt` is already set) and against a booking getting a second contract (409 on `POST /bookings/:id/contract` if one exists — `Contract.bookingId` is `@unique`).
-- On sign, `PdfService` (`apps/api/src/contracts/pdf.service.ts`, using `pdf-lib`) renders the contract body as plain wrapped text (no rich Markdown layout — headers/bold/etc. in `bodyMarkdown` show as literal characters, not styled) plus an audit footer — signer name, ISO timestamp, IP (`req.ip`), user agent — and embeds the signature PNG. The finished PDF is hashed (`sha256`, stored as `Contract.documentHash`) *after* generation, not before, so the hash isn't self-referential and can be used later to verify the stored file hasn't been tampered with. The PDF is stored privately at `contracts/<contractId>.pdf` in the same R2/MinIO bucket as media; `GET /contracts/:id/download` mints a fresh presigned URL rather than exposing the object directly, and both the owner and the signer can call it — verified end-to-end with a real signature drawn in the browser, confirming the rendered PDF actually contains the embedded signature image and audit fields.
+- On sign, `PdfService` (`apps/api/src/contracts/pdf.service.ts`, using `pdf-lib`) renders the contract body as plain wrapped text (no rich Markdown layout — headers/bold/etc. in `bodyMarkdown` show as literal characters, not styled) plus an audit footer — signer name, ISO timestamp, IP (`req.ip`), user agent — and embeds the signature PNG. The finished PDF is hashed (`sha256`, stored as `Contract.documentHash`) _after_ generation, not before, so the hash isn't self-referential and can be used later to verify the stored file hasn't been tampered with. The PDF is stored privately at `contracts/<contractId>.pdf` in the same R2/MinIO bucket as media; `GET /contracts/:id/download` mints a fresh presigned URL rather than exposing the object directly, and both the owner and the signer can call it — verified end-to-end with a real signature drawn in the browser, confirming the rendered PDF actually contains the embedded signature image and audit fields.
 
 ## Financials (Phase 5)
 
