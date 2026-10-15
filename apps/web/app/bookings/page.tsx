@@ -67,17 +67,24 @@ export default function BookingsPage() {
       {loading ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : (
-        <DndContext onDragEnd={handleDragEnd}>
-          <div className="flex gap-3 overflow-x-auto pb-4">
-            {STAGES.map((stage) => (
-              <BookingColumn
-                key={stage}
-                stage={stage}
-                bookings={bookings.filter((b) => b.stage === stage)}
-              />
-            ))}
+        bookings.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center">
+            <h2 className="text-sm font-semibold">No jobs yet</h2>
+            <p className="mt-1 text-sm text-slate-500">Create a booking above for a shoot you arranged directly with a client.</p>
           </div>
-        </DndContext>
+        ) : (
+          <DndContext onDragEnd={handleDragEnd}>
+            <div className="flex gap-3 overflow-x-auto pb-4">
+              {STAGES.map((stage) => (
+                <BookingColumn
+                  key={stage}
+                  stage={stage}
+                  bookings={bookings.filter((b) => b.stage === stage)}
+                />
+              ))}
+            </div>
+          </DndContext>
+        )
       )}
     </div>
   );

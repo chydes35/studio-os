@@ -9,6 +9,8 @@ export default function ClientsPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", email: "", phone: "", source: "" });
 
   const load = () => {
     setLoading(true);
@@ -41,6 +43,24 @@ export default function ClientsPage() {
     }
   }
 
+  async function handleUpdate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId) return;
+    setError(null);
+    try {
+      await api.updateClient(editingId, {
+        name: editForm.name,
+        email: editForm.email,
+        phone: editForm.phone || null,
+        source: editForm.source || null,
+      });
+      setEditingId(null);
+      load();
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
       <div>
@@ -58,15 +78,34 @@ export default function ClientsPage() {
                   <th className="px-4 py-2 font-medium">Email</th>
                   <th className="px-4 py-2 font-medium">Phone</th>
                   <th className="px-4 py-2 font-medium">Source</th>
+                  <th className="px-4 py-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {clients.map((c) => (
                   <tr key={c.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-2 font-medium">{c.name}</td>
-                    <td className="px-4 py-2 text-slate-600">{c.email}</td>
-                    <td className="px-4 py-2 text-slate-600">{c.phone ?? "—"}</td>
-                    <td className="px-4 py-2 text-slate-600">{c.source ?? "—"}</td>
+                    {editingId === c.id ? (
+                      <>
+                        <td className="px-2 py-2"><input aria-label="Client name" required value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full rounded border px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input aria-label="Client email" type="email" required value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="w-full rounded border px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input aria-label="Client phone" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="w-full rounded border px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input aria-label="Client source" value={editForm.source} onChange={(e) => setEditForm({ ...editForm, source: e.target.value })} className="w-full rounded border px-2 py-1" /></td>
+                        <td className="whitespace-nowrap px-2 py-2">
+                          <form onSubmit={handleUpdate} className="flex gap-2">
+                            <button type="submit" className="text-xs font-medium text-slate-900 underline">Save</button>
+                            <button type="button" onClick={() => setEditingId(null)} className="text-xs text-slate-500 underline">Cancel</button>
+                          </form>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-4 py-2 font-medium">{c.name}</td>
+                        <td className="px-4 py-2 text-slate-600">{c.email}</td>
+                        <td className="px-4 py-2 text-slate-600">{c.phone ?? "—"}</td>
+                        <td className="px-4 py-2 text-slate-600">{c.source ?? "—"}</td>
+                        <td className="px-4 py-2"><button type="button" onClick={() => { setEditingId(c.id); setEditForm({ name: c.name, email: c.email, phone: c.phone ?? "", source: c.source ?? "" }); }} className="text-xs text-slate-700 underline">Edit</button></td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>

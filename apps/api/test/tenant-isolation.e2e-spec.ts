@@ -76,7 +76,7 @@ describe('tenant isolation', () => {
   afterAll(() => app.close());
 
   it("B's lists never include A's records", async () => {
-    for (const path of ['/clients', '/bookings', '/equipment', '/locations', '/expenses', '/contract-templates', '/questionnaire-templates']) {
+    for (const path of ['/clients', '/bookings', '/equipment', '/locations', '/expenses', '/contract-templates', '/questionnaire-templates', '/invoices/open']) {
       const res = await b.get(path);
       expect(res.status, path).toBe(200);
       expect(res.body, path).toEqual([]);
@@ -103,6 +103,8 @@ describe('tenant isolation', () => {
   it("B cannot change or attach to A's records", async () => {
     const attempts: [string, () => Promise<{ status: number; text: string }>][] = [
       ['stage', () => b.patch(`/bookings/${ids.booking}/stage`).send({ stage: 'CLOSED' })],
+      ['edit A booking', () => b.patch(`/bookings/${ids.booking}`).send({ shootType: 'hijacked' })],
+      ['edit A client', () => b.patch(`/clients/${ids.client}`).send({ name: 'hijacked' })],
       ['booking location', () => b.patch(`/bookings/${ids.booking}/location`).send({ locationId: null })],
       ['create booking on A client', () => b.post('/bookings').send({ clientId: ids.client, shootType: 'x' })],
       ['create booking at A location', async () => {
@@ -142,8 +144,17 @@ describe('tenant isolation', () => {
     expect(invoice.body[0].status).toBe('DRAFT');
     expect(invoice.body[0].paidCents).toBe(0);
 
+    const openInvoices = await a.get('/invoices/open');
+    expect(openInvoices.body).toHaveLength(1);
+    expect(openInvoices.body[0].booking.client.name).toBe('Client A');
+    expect(openInvoices.body[0].balanceCents).toBe(10_000);
+
     const booking = await a.get(`/bookings/${ids.booking}`);
     expect(booking.body.stage).not.toBe('CLOSED');
+    expect(booking.body.shootType).toBe('Wedding');
+
+    const client = await a.get(`/clients/${ids.client}`);
+    expect(client.body.name).toBe('Client A');
 
     expect((await a.get('/equipment')).body).toHaveLength(1);
     expect((await a.get('/equipment')).body[0].name).toBe('Camera');

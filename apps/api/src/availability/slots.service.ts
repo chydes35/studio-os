@@ -36,6 +36,7 @@ export class SlotsService {
     dateStr: string,
     durationMins: number,
     db: Db = this.prisma,
+    excludeBookingId?: string,
   ): Promise<AvailableSlotsResponse> {
     const owner = await db.user.findUnique({
       where: { id: ownerId },
@@ -55,6 +56,7 @@ export class SlotsService {
       db.booking.findMany({
         where: {
           ownerId,
+          ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
           // A CLOSED booking (declined, cancelled or finished) no longer holds
           // its time. Without this, declining a portal request left its slot
           // blocked forever, since bookings can't be deleted.

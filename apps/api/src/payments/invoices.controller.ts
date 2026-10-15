@@ -24,6 +24,11 @@ export class InvoicesController {
     return this.invoicesService.listForBookingOwnerView(bookingId);
   }
 
+  @Get('invoices/open')
+  listOpenForOwner() {
+    return this.invoicesService.listOpenForOwner();
+  }
+
   @Patch('invoices/:id/send')
   markSent(@Param('id') id: string) {
     return this.invoicesService.markSent(id);

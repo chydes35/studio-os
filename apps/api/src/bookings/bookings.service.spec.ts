@@ -10,17 +10,24 @@ const ownerContext = { getOwnerId: async () => OWNER } as OwnerContextService;
 
 /** Rows owned by OWNER; anything else simulates another studio's id. */
 function fakePrisma() {
-  const owned = (id: string, where: { id: string; ownerId: string }) =>
-    where.id === id && where.ownerId === OWNER ? { id, ownerId: OWNER } : null;
-  return {
+  const tx = {
+    $executeRaw: vi.fn(async () => 0),
+    user: { findUnique: vi.fn(async () => ({ id: OWNER, timezone: 'UTC' })) },
     client: { findFirst: vi.fn(async ({ where }) => owned('client_a', where)) },
     location: { findFirst: vi.fn(async ({ where }) => owned('location_a', where)) },
     booking: {
       findFirst: vi.fn(async ({ where }) => owned('booking_a', where)),
       create: vi.fn(async ({ data }) => ({ id: 'new_booking', ...data })),
+      update: vi.fn(async ({ data }) => ({ id: 'booking_a', ...data })),
     },
-    expense: { create: vi.fn(async ({ data }) => ({ id: 'new_expense', ...data })) },
   };
+  const prisma = {
+    ...tx,
+    $transaction: vi.fn(async (run) => run(tx)),
+  };
+  const owned = (id: string, where: { id: string; ownerId: string }) =>
+    where.id === id && where.ownerId === OWNER ? { id, ownerId: OWNER } : null;
+  return { ...prisma, expense: { create: vi.fn(async ({ data }) => ({ id: 'new_expense', ...data })) } };
 }
 
 describe('BookingsService.create — tenant isolation', () => {

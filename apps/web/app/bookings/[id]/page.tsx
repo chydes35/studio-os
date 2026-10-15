@@ -7,6 +7,9 @@ import { BookingEquipmentSection } from "./BookingEquipmentSection";
 import { BookingInvoicesSection } from "./BookingInvoicesSection";
 import { BookingLocationSection } from "./BookingLocationSection";
 import { BookingQuestionnaireSection } from "./BookingQuestionnaireSection";
+import { BookingEditor } from "./BookingEditor";
+import type { BookingStage } from "@repo/shared";
+import { CopyLinkButton } from "../../../components/CopyLinkButton";
 
 export default function BookingDetailPage({
   params,
@@ -26,12 +29,15 @@ export default function BookingDetailPage({
   const [passwordInput, setPasswordInput] = useState("");
   const [justCreatedPassword, setJustCreatedPassword] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [stageChoice, setStageChoice] = useState<BookingStage | "">("");
+  const [savingStage, setSavingStage] = useState(false);
 
   const load = () => {
     setLoading(true);
     Promise.all([api.getBooking(id), api.getGalleryForBooking(id)])
       .then(([b, g]) => {
         setBooking(b);
+        setStageChoice(b.stage);
         setGallery(g);
       })
       .catch((err) => setError(String(err)))
@@ -123,6 +129,21 @@ export default function BookingDetailPage({
     }
   }
 
+  async function handleStageUpdate() {
+    if (!booking || !stageChoice || stageChoice === booking.stage) return;
+    setSavingStage(true);
+    setError(null);
+    try {
+      const updated = await api.updateBookingStage(id, stageChoice);
+      setBooking(updated);
+      setStageChoice(updated.stage);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSavingStage(false);
+    }
+  }
+
   if (loading) return <p className="text-sm text-slate-500">Loading…</p>;
   if (!booking) return <p className="text-sm text-red-600">Booking not found.</p>;
 
@@ -133,16 +154,29 @@ export default function BookingDetailPage({
 
   return (
     <div className="grid gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">{booking.client.name}</h1>
-        <p className="text-sm text-slate-500">
-          {booking.shootType}
-          {booking.scheduledAt &&
-            ` · ${new Date(booking.scheduledAt).toLocaleString()}`}
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Job overview</h1>
+          <p className="text-sm text-slate-600">
+            {booking.client.name} · {booking.shootType}
+            {booking.scheduledAt && (
+              <> · {new Date(booking.scheduledAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</>
+            )}
+          </p>
+        </div>
+        <div className="flex items-end gap-2">
+          <label className="grid gap-1 text-xs text-slate-500">Booking stage
+            <select value={stageChoice} onChange={(e) => setStageChoice(e.target.value as BookingStage)} className="rounded border border-slate-300 px-2 py-1.5 text-sm text-slate-900">
+              {(["INQUIRY", "BOOKED", "SHOT", "EDITING", "DELIVERED", "CLOSED"] as const).map((stage) => <option key={stage} value={stage}>{stage[0] + stage.slice(1).toLowerCase()}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={handleStageUpdate} disabled={savingStage || stageChoice === booking.stage} className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">{savingStage ? "Saving…" : "Update stage"}</button>
+        </div>
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
+
+      <BookingEditor booking={booking} onUpdated={setBooking} />
 
       <BookingContractSection bookingId={id} booking={booking} />
 
@@ -191,6 +225,7 @@ export default function BookingDetailPage({
           <div className="rounded-lg border border-slate-200 bg-white p-4">
             <p className="text-sm font-semibold">Share with your client</p>
             <p className="mt-1 break-all text-sm text-slate-600">{galleryUrl}</p>
+            <div className="mt-2"><CopyLinkButton value={galleryUrl} /></div>
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-4">

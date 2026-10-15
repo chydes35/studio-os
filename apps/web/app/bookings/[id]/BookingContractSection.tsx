@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type Booking, type Contract, type ContractTemplate } from "../../../lib/api";
+import { CopyLinkButton } from "../../../components/CopyLinkButton";
 
 function extractVariableNames(bodyMarkdown: string): string[] {
   const matches = bodyMarkdown.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g);
@@ -162,6 +163,7 @@ export function BookingContractSection({
             )}
           </p>
           <p className="break-all text-sm text-slate-600">{contractUrl}</p>
+          <CopyLinkButton value={contractUrl} label="Copy contract link" />
           {contract.signedAt && (
             <button
               onClick={handleDownload}

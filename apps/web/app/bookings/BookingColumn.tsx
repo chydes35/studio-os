@@ -34,7 +34,9 @@ export function BookingColumn({
         {STAGE_LABELS[stage]} · {bookings.length}
       </h3>
       <div className="flex flex-1 flex-col gap-2">
-        {bookings.map((b) => (
+        {bookings.length === 0 ? (
+          <p className="px-1 py-2 text-xs text-slate-400">Nothing in this stage yet.</p>
+        ) : bookings.map((b) => (
           <BookingCard key={b.id} booking={b} />
         ))}
       </div>

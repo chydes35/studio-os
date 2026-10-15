@@ -76,6 +76,32 @@ export class InvoicesService {
     return invoices.map((inv) => ({ ...inv, ...computeTotals(inv) }));
   }
 
+  async listOpenForOwner() {
+    const ownerId = await this.ownerContext.getOwnerId();
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        booking: { ownerId },
+        status: { in: ['DRAFT', 'SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
+      },
+      include: {
+        lineItems: true,
+        payments: true,
+        booking: {
+          select: {
+            id: true,
+            shootType: true,
+            client: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+      take: 10,
+    });
+    return invoices
+      .map((invoice) => ({ ...invoice, ...computeTotals(invoice) }))
+      .filter((invoice) => invoice.balanceCents > 0);
+  }
+
   async markSent(id: string) {
     const invoice = await this.findOwned(id);
     if (invoice.status !== 'DRAFT') {
