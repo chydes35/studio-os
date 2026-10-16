@@ -13,6 +13,13 @@ const PRESIGN_EXPIRY_SECONDS = 60 * 60;
 @Injectable()
 export class StorageService {
   private readonly client: S3Client;
+  /**
+   * Signs the URLs handed to browsers. Usually the same store as `client`, but
+   * when storage sits behind a tunnel the browser must reach it by its public
+   * address (the address is part of the signature) and with a key that can only
+   * read and write objects, never the store's admin login.
+   */
+  private readonly presignClient: S3Client;
   private readonly bucket: string;
   private readonly publicUrlBase: string | undefined;
 
@@ -22,20 +29,45 @@ export class StorageService {
     this.bucket = this.config.get<string>('R2_BUCKET_NAME') ?? '';
     this.publicUrlBase = this.config.get<string>('R2_PUBLIC_URL');
 
-    this.client = new S3Client({
+    const resolvedEndpoint = endpoint || `https://${accountId}.r2.cloudflarestorage.com`;
+    const accessKeyId = this.config.get<string>('R2_ACCESS_KEY_ID') ?? '';
+    const secretAccessKey = this.config.get<string>('R2_SECRET_ACCESS_KEY') ?? '';
+    this.client = StorageService.createClient(resolvedEndpoint, Boolean(endpoint), accessKeyId, secretAccessKey);
+
+    const publicEndpoint = this.config.get<string>('R2_PUBLIC_ENDPOINT');
+    const presignAccessKeyId = this.config.get<string>('R2_PRESIGN_ACCESS_KEY_ID');
+    const presignSecret = this.config.get<string>('R2_PRESIGN_SECRET_ACCESS_KEY');
+    if (Boolean(presignAccessKeyId) !== Boolean(presignSecret)) {
+      throw new Error('Set both R2_PRESIGN_ACCESS_KEY_ID and R2_PRESIGN_SECRET_ACCESS_KEY, or neither');
+    }
+    this.presignClient =
+      publicEndpoint || presignAccessKeyId
+        ? StorageService.createClient(
+            publicEndpoint || resolvedEndpoint,
+            Boolean(endpoint),
+            presignAccessKeyId || accessKeyId,
+            presignSecret || secretAccessKey,
+          )
+        : this.client;
+  }
+
+  private static createClient(
+    endpoint: string,
+    forcePathStyle: boolean,
+    accessKeyId: string,
+    secretAccessKey: string,
+  ) {
+    return new S3Client({
       region: 'auto',
-      endpoint: endpoint || `https://${accountId}.r2.cloudflarestorage.com`,
-      forcePathStyle: Boolean(endpoint), // MinIO (local dev) needs path-style; real R2 doesn't
+      endpoint,
+      forcePathStyle, // MinIO (local dev) needs path-style; real R2 doesn't
       // Since SDK v3.729 a presigned PUT bakes in a CRC32 of the (empty) body it
       // was signed with. MinIO ignored it, but S3-compatible stores that verify
       // it (Cloudflare R2 documents this) reject every real upload with a
       // checksum mismatch. Only compute checksums when an operation requires one.
       requestChecksumCalculation: 'WHEN_REQUIRED',
       responseChecksumValidation: 'WHEN_REQUIRED',
-      credentials: {
-        accessKeyId: this.config.get<string>('R2_ACCESS_KEY_ID') ?? '',
-        secretAccessKey: this.config.get<string>('R2_SECRET_ACCESS_KEY') ?? '',
-      },
+      credentials: { accessKeyId, secretAccessKey },
     });
   }
 
@@ -72,7 +104,7 @@ export class StorageService {
     contentLength?: number,
   ): Promise<string> {
     return getSignedUrl(
-      this.client,
+      this.presignClient,
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
@@ -104,7 +136,7 @@ export class StorageService {
 
   /** For private objects (contracts, originals) that need a time-limited link. */
   async getPresignedGetUrl(key: string): Promise<string> {
-    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
+    return getSignedUrl(this.presignClient, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
       expiresIn: PRESIGN_EXPIRY_SECONDS,
     });
   }
@@ -117,7 +149,7 @@ export class StorageService {
    */
   async getPresignedDownloadUrl(key: string, fileName: string): Promise<string> {
     return getSignedUrl(
-      this.client,
+      this.presignClient,
       new GetObjectCommand({
         Bucket: this.bucket,
         Key: key,

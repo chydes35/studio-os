@@ -34,3 +34,9 @@ for (const key of [
 ]) {
   delete process.env[key];
 }
+// Presigned links go straight to the local store here, not through a public
+// media gateway. Empty rather than deleted: ConfigModule refills deleted keys
+// from .env, but never overrides one that is already set.
+for (const key of ['R2_PUBLIC_ENDPOINT', 'R2_PRESIGN_ACCESS_KEY_ID', 'R2_PRESIGN_SECRET_ACCESS_KEY']) {
+  process.env[key] = '';
+}
