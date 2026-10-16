@@ -405,3 +405,15 @@ export const authResponseSchema = z.object({
   user: authUserSchema,
 });
 export type AuthResponse = z.infer<typeof authResponseSchema>;
+
+/**
+ * REGISTRATION_OPEN: empty or unset means sign-up is open; "false"/"0"/"no"/"off"
+ * closes it. Anything else is an error so a typo ("closed", "flase") can never
+ * leave a switch the owner believes is off actually on.
+ */
+export function parseRegistrationOpen(value: string | undefined): boolean {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (["", "true", "1", "yes", "on"].includes(normalized)) return true;
+  if (["false", "0", "no", "off"].includes(normalized)) return false;
+  throw new Error(`REGISTRATION_OPEN must be true or false (got "${value}")`);
+}

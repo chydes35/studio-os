@@ -86,7 +86,7 @@ Until there is a hosted deployment, clients reach galleries, contracts, invoices
 | `api.<domain>` | API, production build (3001) |
 | `media.<domain>` | `scripts/media-gateway.mjs` (9010), in front of MinIO (9000) |
 
-MinIO itself is never published: its admin login is the demo value in `.env.example`. The gateway lets through only anonymous reads of `previews/*`, CORS preflights, and object reads/writes presigned with a limited browser key that cannot list, delete or administer (`scripts/create-browser-key.sh`). `R2_PUBLIC_ENDPOINT` makes the API sign browser links for the media hostname with that key; server-side storage calls still use the local endpoint.
+MinIO itself is never published: its admin login is the demo value in `.env.example`. The gateway lets through only anonymous reads of `previews/*`, CORS preflights, and object reads/writes presigned with a limited browser key that cannot list, delete or administer (`scripts/create-browser-key.sh`). `R2_PUBLIC_ENDPOINT` makes the API sign browser links for the media hostname with that key and derive public preview URLs from it (`R2_PUBLIC_URL` is ignored while it is set); server-side storage calls still use the local endpoint. The gateway also refuses every `x-amz-*` (except content-sha256) and `x-minio-*` request header, since a browser sends none.
 
 One-time setup:
 

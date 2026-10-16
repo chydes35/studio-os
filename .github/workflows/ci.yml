@@ -94,6 +94,13 @@ jobs:
       - name: Test
         run: npx turbo run test
 
+      # The media gateway rules are the only barrier between the internet and
+      # the local object store when serving from a Mac, so they gate merges too.
+      - name: Script tests (backup safety, media gateway rules)
+        run: |
+          npm run test:backup
+          npm run test:gateway
+
       # End-to-end API tests: real Nest app, real Postgres, and SeaweedFS
       # standing in for R2 (S3 API). MinIO's public images and binaries were
       # withdrawn, so it can no longer be pulled in CI. The tests create the

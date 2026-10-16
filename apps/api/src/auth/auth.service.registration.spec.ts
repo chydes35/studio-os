@@ -34,4 +34,10 @@ describe('AuthService.register and REGISTRATION_OPEN', () => {
     expect(findUnique).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
   });
+
+  it.each(['closed', 'flase'])('rejects the unrecognized value %j instead of treating it as open', async (value) => {
+    const { service, findUnique } = serviceWith(value);
+    await expect(service.register(dto)).rejects.toThrow('REGISTRATION_OPEN');
+    expect(findUnique).not.toHaveBeenCalled();
+  });
 });

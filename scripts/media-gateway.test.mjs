@@ -94,3 +94,23 @@ test('allows legitimate file names that contain dots', () => {
     true,
   );
 });
+
+test('refuses MinIO control headers a presigned URL never signed', () => {
+  const url = signed('originals/g/m-a.jpg');
+  for (const header of [
+    'X-Amz-Meta-Snowball-Auto-Extract',
+    'x-minio-extract',
+    'X-Minio-Source-Replication-Request',
+    'x-amz-acl',
+    'x-amz-metadata-directive',
+    'x-amz-server-side-encryption-customer-key',
+  ]) {
+    assert.equal(check('PUT', url, { [header]: 'true' }).ok, false, header);
+    assert.equal(check('GET', '/studio-os-media/previews/g/m.jpg', { [header]: 'true' }).ok, false, header);
+  }
+  // What a browser or the AWS SDK's presigned flow can legitimately send.
+  assert.equal(
+    check('PUT', url, { 'content-type': 'image/jpeg', 'content-length': '10', origin: 'https://x.test', 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' }).ok,
+    true,
+  );
+});

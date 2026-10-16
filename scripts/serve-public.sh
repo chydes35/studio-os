@@ -25,6 +25,8 @@ load_env() {
   . ./.env
   [ -f .env.public ] && . ./.env.public
   set +a
+  # The web build needs to know too, so it stops advertising sign-up when closed.
+  export NEXT_PUBLIC_REGISTRATION_OPEN="${REGISTRATION_OPEN:-}"
   WEB_PORT="${WEB_PORT:-3000}"
   export PORT="${PORT:-3001}" MEDIA_GATEWAY_PORT="${MEDIA_GATEWAY_PORT:-9010}"
 }
@@ -51,9 +53,40 @@ launch() { # name, command...
   echo "  $name started (pid $pid, log $RUN_DIR/$name.log)"
 }
 
+# Fails fast if the process we launched has already died (for example EADDRINUSE),
+# instead of polling a port that something else answers.
 wait_for() { # name, url
-  for _ in $(seq 1 60); do curl -sf -o /dev/null "$2" && return 0; sleep 1; done
-  echo "  $1 did not come up; see $RUN_DIR/$1.log"; return 1
+  for _ in $(seq 1 60); do
+    is_running "$1" || { echo "  $1 exited right after starting"; return 1; }
+    curl -sf -o /dev/null "$2" && return 0
+    sleep 1
+  done
+  echo "  $1 did not come up"; return 1
+}
+
+# Leave nothing half-running: show why, stop what this run started, and exit.
+fail_start() { # name
+  local clean; clean="$(sed 's/\x1b\[[0-9;]*m//g' "$RUN_DIR/$1.log" 2>/dev/null)"
+  echo "  why ($RUN_DIR/$1.log):"
+  { printf '%s\n' "$clean" | grep -m1 -E 'Error:|error:' || true; printf '%s\n' "$clean" | tail -3; } | sed 's/^/    /'
+  stop
+  exit 1
+}
+
+# A port held by something that is not ours (typically a leftover `npm run
+# dev:local`) would answer our health checks and then be published by the tunnel.
+check_ports() {
+  local entry name port holder
+  for entry in "gateway:$MEDIA_GATEWAY_PORT" "api:$PORT" "web:$WEB_PORT"; do
+    name="${entry%%:*}"; port="${entry##*:}"
+    is_running "$name" && continue
+    holder="$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | head -1 || true)"
+    if [ -n "$holder" ]; then
+      echo "Port $port ($name) is already in use by pid $holder: $(ps -p "$holder" -o command= | cut -c1-80)"
+      echo "Stop it first (for the dev app, Ctrl+C in its terminal), then start again."
+      exit 1
+    fi
+  done
 }
 
 start() {
@@ -69,6 +102,8 @@ start() {
     export NODE_ENV=production
   fi
 
+  echo "==> ports"
+  check_ports
   echo "==> local services and migrations"
   node scripts/setup-local.mjs >/dev/null
   echo "==> readiness checks"
@@ -83,8 +118,10 @@ start() {
     node scripts/media-gateway.mjs
   launch api bash -c 'cd apps/api && exec npm run start:prod'
   launch web bash -c "cd apps/web && exec npx next start -p $WEB_PORT"
-  wait_for api "http://localhost:$PORT/health/ready"
-  wait_for web "http://localhost:$WEB_PORT/login"
+  wait_for api "http://localhost:$PORT/health/ready" || fail_start api
+  wait_for web "http://localhost:$WEB_PORT/login" || fail_start web
+  sleep 1
+  is_running gateway || fail_start gateway
   launch awake caffeinate -ims -w "$(pid_of api)"
   if [ "$mode" != "--local" ]; then
     launch tunnel cloudflared tunnel --no-autoupdate run "$TUNNEL_NAME"

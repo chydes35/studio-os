@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { setCachedUser, setToken } from "../../lib/auth";
+import { registrationOpen } from "../../lib/registration";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -66,12 +67,14 @@ export default function LoginPage() {
           Forgot your password?
         </Link>
       </p>
-      <p className="mt-2 text-center text-xs text-slate-500">
-        Don&apos;t have a studio account yet?{" "}
-        <Link href="/register" className="underline">
-          Create one
-        </Link>
-      </p>
+      {registrationOpen() && (
+        <p className="mt-2 text-center text-xs text-slate-500">
+          Don&apos;t have a studio account yet?{" "}
+          <Link href="/register" className="underline">
+            Create one
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

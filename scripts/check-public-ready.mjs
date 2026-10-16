@@ -43,18 +43,8 @@ function requireUrl(name, { https = !local } = {}) {
 
 requireUrl('WEB_APP_URL');
 requireUrl('NEXT_PUBLIC_API_URL');
-const mediaEndpoint = requireUrl('R2_PUBLIC_ENDPOINT');
-if (mediaEndpoint) {
-  let previewOrigin;
-  try {
-    previewOrigin = new URL(env.R2_PUBLIC_URL ?? '').origin;
-  } catch {
-    problems.push('R2_PUBLIC_URL is not set or not a URL');
-  }
-  if (previewOrigin !== undefined && previewOrigin !== mediaEndpoint.origin) {
-    problems.push('R2_PUBLIC_URL must live on R2_PUBLIC_ENDPOINT so previews go through the media gateway');
-  }
-}
+// Public preview URLs are derived from this by the API, so there is nothing to keep in sync.
+requireUrl('R2_PUBLIC_ENDPOINT');
 if (env.CORS_ORIGINS !== env.WEB_APP_URL && !local) {
   problems.push('CORS_ORIGINS should be exactly WEB_APP_URL for public use');
 }
@@ -63,8 +53,8 @@ if (!env.R2_PRESIGN_ACCESS_KEY_ID || !env.R2_PRESIGN_SECRET_ACCESS_KEY) {
 } else if (env.R2_PRESIGN_ACCESS_KEY_ID === env.R2_ACCESS_KEY_ID) {
   problems.push('R2_PRESIGN_ACCESS_KEY_ID must be the limited browser key, not the storage admin key');
 }
-if (!local && !env.REGISTRATION_OPEN) {
-  problems.push('REGISTRATION_OPEN is not set: use "false" to close public sign-up (or "true" to allow it on purpose)');
+if (!local && !/^(true|false)$/i.test((env.REGISTRATION_OPEN ?? '').trim())) {
+  problems.push('REGISTRATION_OPEN must be exactly "false" (close public sign-up) or "true" (allow it on purpose)');
 }
 if (!local && env.TRUST_PROXY !== '1') problems.push('TRUST_PROXY must be 1 behind cloudflared');
 

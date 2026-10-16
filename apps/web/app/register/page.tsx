@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { setCachedUser, setToken } from "../../lib/auth";
+import { registrationOpen } from "../../lib/registration";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -31,10 +32,24 @@ export default function RegisterPage() {
       setCachedUser(user);
       router.replace("/");
     } catch (err) {
-      setError(String(err));
+      setError(String(err).includes("Sign-ups are closed") ? "Sign-ups are closed for this studio." : String(err));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (!registrationOpen()) {
+    return (
+      <div className="mx-auto max-w-sm">
+        <h1 className="mb-2 text-xl font-semibold">Sign-ups are closed</h1>
+        <p className="text-sm text-slate-600">
+          This studio is not accepting new accounts.{" "}
+          <Link href="/login" className="underline">
+            Log in
+          </Link>
+        </p>
+      </div>
+    );
   }
 
   return (

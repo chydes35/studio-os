@@ -21,6 +21,7 @@ import type {
   RegisterDto,
   ResetPasswordDto,
 } from '@repo/shared';
+import { parseRegistrationOpen } from '@repo/shared';
 import { PRISMA } from '../db/db.module.js';
 import { html } from '../notifications/email-html.js';
 import { EmailService } from '../notifications/email.service.js';
@@ -57,11 +58,11 @@ export class AuthService {
   /**
    * Public deployments set REGISTRATION_OPEN=false once the owner's account
    * exists, so strangers cannot create studios (and store files) on the host.
-   * Unset keeps sign-up open, which is what local development and tests expect.
+   * Unset keeps sign-up open, which is what local development and tests expect;
+   * an unrecognized value is rejected at startup (validateRuntimeConfig).
    */
   private registrationOpen(): boolean {
-    const value = this.config.get<string>('REGISTRATION_OPEN');
-    return !['false', '0', 'no', 'off'].includes((value ?? '').trim().toLowerCase());
+    return parseRegistrationOpen(this.config.get<string>('REGISTRATION_OPEN'));
   }
 
   /**

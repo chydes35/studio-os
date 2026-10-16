@@ -27,7 +27,6 @@ export class StorageService {
     const endpoint = this.config.get<string>('R2_ENDPOINT');
     const accountId = this.config.get<string>('R2_ACCOUNT_ID');
     this.bucket = this.config.get<string>('R2_BUCKET_NAME') ?? '';
-    this.publicUrlBase = this.config.get<string>('R2_PUBLIC_URL');
 
     const resolvedEndpoint = endpoint || `https://${accountId}.r2.cloudflarestorage.com`;
     const accessKeyId = this.config.get<string>('R2_ACCESS_KEY_ID') ?? '';
@@ -41,19 +40,25 @@ export class StorageService {
       throw new Error('Set both R2_PRESIGN_ACCESS_KEY_ID and R2_PRESIGN_SECRET_ACCESS_KEY, or neither');
     }
     if (publicEndpoint && !presignAccessKeyId) {
-      // Falling back to the main key would hand browsers admin-signed links.
+      // Without the limited key, browsers would be handed admin-signed links.
       throw new Error('R2_PUBLIC_ENDPOINT requires R2_PRESIGN_ACCESS_KEY_ID and R2_PRESIGN_SECRET_ACCESS_KEY');
     }
     this.presignClient =
-      publicEndpoint || presignAccessKeyId
+      presignAccessKeyId && presignSecret
         ? StorageService.createClient(
             publicEndpoint || resolvedEndpoint,
             // The media gateway only understands path-style URLs.
             Boolean(endpoint) || Boolean(publicEndpoint),
-            presignAccessKeyId || accessKeyId,
-            presignSecret || secretAccessKey,
+            presignAccessKeyId,
+            presignSecret,
           )
         : this.client;
+
+    // Browsers load public previews from the same host the gateway serves, so
+    // it is derived rather than configured twice.
+    this.publicUrlBase = publicEndpoint
+      ? `${publicEndpoint.replace(/\/+$/, '')}/${this.bucket}`
+      : this.config.get<string>('R2_PUBLIC_URL');
   }
 
   private static createClient(

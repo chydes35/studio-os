@@ -68,4 +68,19 @@ describe('StorageService presigned URLs', () => {
     expect(url.hostname).toBe('media.example.com');
     expect(url.pathname).toBe('/studio-os-media/originals/g/m-a.jpg');
   });
+
+  it('derives public preview URLs from the public endpoint, ignoring R2_PUBLIC_URL', () => {
+    const limited = { R2_PRESIGN_ACCESS_KEY_ID: 'browser-key', R2_PRESIGN_SECRET_ACCESS_KEY: 'browser-secret' };
+    expect(
+      storageWith({
+        ...LOCAL,
+        ...limited,
+        R2_PUBLIC_ENDPOINT: 'https://media.example.com/',
+        R2_PUBLIC_URL: 'http://localhost:9000/studio-os-media',
+      }).publicUrl('previews/g/m.jpg'),
+    ).toBe('https://media.example.com/studio-os-media/previews/g/m.jpg');
+    expect(storageWith({ ...LOCAL, R2_PUBLIC_URL: 'https://cdn.example.com' }).publicUrl('previews/g/m.jpg')).toBe(
+      'https://cdn.example.com/previews/g/m.jpg',
+    );
+  });
 });

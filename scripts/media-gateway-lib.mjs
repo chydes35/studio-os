@@ -41,7 +41,15 @@ export function checkMediaRequest(req, { bucket, browserAccessKey }) {
   const method = req.method.toUpperCase();
   if (!ALLOWED_METHODS.has(method)) return deny(405, 'method not allowed');
   if (req.headers.authorization !== undefined) return deny(403, 'header auth not allowed');
-  if (req.headers['x-amz-copy-source'] !== undefined) return deny(403, 'copy not allowed');
+  // Browsers send none of MinIO's own control headers. Refusing them all keeps
+  // a presigned PUT from carrying instructions the signature never covered
+  // (copy source, snowball auto-extract, x-minio-* internals, metadata/ACL).
+  for (const name of Object.keys(req.headers)) {
+    const lower = name.toLowerCase();
+    if ((lower.startsWith('x-amz-') && lower !== 'x-amz-content-sha256') || lower.startsWith('x-minio-')) {
+      return deny(403, `header ${lower} not allowed`);
+    }
+  }
   if (
     method === 'PUT' &&
     /^(application\/x-www-form-urlencoded|multipart\/)/i.test(String(req.headers['content-type'] ?? ''))

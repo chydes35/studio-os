@@ -13,7 +13,7 @@
     "backup:local": "node scripts/backup-local.mjs",
     "restore:local": "node scripts/restore-local.mjs",
     "test:backup": "node --test scripts/local-backup.test.mjs",
-    "test:gateway": "node --test scripts/media-gateway.test.mjs"
+    "test:gateway": "node --test scripts/media-gateway.test.mjs scripts/media-gateway-server.test.mjs"
   },
   "devDependencies": {
     "prettier": "3.9.6",

@@ -1,3 +1,5 @@
+import { parseRegistrationOpen } from '@repo/shared';
+
 const EXAMPLE_AUTH_SECRET = 'generate-with-openssl-rand-base64-32';
 
 function parseOrigins(value: string): string[] {
@@ -49,6 +51,8 @@ export function validateRuntimeConfig(env: Record<string, string | undefined>) {
   if (isProduction && corsOrigins.some((origin) => new URL(origin).hostname === 'localhost')) {
     throw new Error('CORS_ORIGINS cannot use localhost when NODE_ENV is production');
   }
+
+  parseRegistrationOpen(env.REGISTRATION_OPEN);
 
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: env.NOTIFICATION_TIME_ZONE || 'America/Chicago' });
