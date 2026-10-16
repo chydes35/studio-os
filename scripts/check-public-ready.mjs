@@ -63,6 +63,9 @@ if (!env.R2_PRESIGN_ACCESS_KEY_ID || !env.R2_PRESIGN_SECRET_ACCESS_KEY) {
 } else if (env.R2_PRESIGN_ACCESS_KEY_ID === env.R2_ACCESS_KEY_ID) {
   problems.push('R2_PRESIGN_ACCESS_KEY_ID must be the limited browser key, not the storage admin key');
 }
+if (!local && !env.REGISTRATION_OPEN) {
+  problems.push('REGISTRATION_OPEN is not set: use "false" to close public sign-up (or "true" to allow it on purpose)');
+}
 if (!local && env.TRUST_PROXY !== '1') problems.push('TRUST_PROXY must be 1 behind cloudflared');
 
 // Seed password check: compare every account's hash with the published dev password.

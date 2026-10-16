@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -54,11 +55,24 @@ export class AuthService {
   ) {}
 
   /**
+   * Public deployments set REGISTRATION_OPEN=false once the owner's account
+   * exists, so strangers cannot create studios (and store files) on the host.
+   * Unset keeps sign-up open, which is what local development and tests expect.
+   */
+  private registrationOpen(): boolean {
+    const value = this.config.get<string>('REGISTRATION_OPEN');
+    return !['false', '0', 'no', 'off'].includes((value ?? '').trim().toLowerCase());
+  }
+
+  /**
    * Anyone can register a new OWNER account — this is what actually makes
    * auth "real" rather than a login screen bolted onto a still-single-owner
    * backend: every account gets its own independent Clients/Bookings/etc.
    */
   async register(dto: RegisterDto): Promise<AuthResponse> {
+    if (!this.registrationOpen()) {
+      throw new ForbiddenException('Sign-ups are closed for this studio');
+    }
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
