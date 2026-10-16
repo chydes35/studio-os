@@ -57,6 +57,7 @@ run "typecheck" npx turbo run check-types --output-logs=errors-only
 run "lint"      npx turbo run lint --filter='!mobile' --output-logs=errors-only
 run "unit"      npx turbo run test --output-logs=errors-only
 run "local backup safety tests" npm run test:backup
+run "media gateway rules" npm run test:gateway
 
 case "$tier" in
   fast) ;;

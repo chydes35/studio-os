@@ -30,4 +30,13 @@ describe('validateRuntimeConfig', () => {
     expect(() => validateRuntimeConfig({ ...validEnv, NOTIFICATION_TIME_ZONE: 'Chicago-ish' }))
       .toThrow('NOTIFICATION_TIME_ZONE');
   });
+
+  it('rejects an unrecognized REGISTRATION_OPEN instead of leaving sign-up open', () => {
+    for (const value of ['closed', 'flase', 'disabled', 'maybe']) {
+      expect(() => validateRuntimeConfig({ ...validEnv, REGISTRATION_OPEN: value })).toThrow('REGISTRATION_OPEN');
+    }
+    for (const value of [undefined, '', 'true', 'FALSE', ' 0 ']) {
+      expect(() => validateRuntimeConfig({ ...validEnv, REGISTRATION_OPEN: value })).not.toThrow();
+    }
+  });
 });

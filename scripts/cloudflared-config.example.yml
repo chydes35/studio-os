@@ -1,0 +1,17 @@
+# Copy to ~/.cloudflared/config.yml and replace example.com and the tunnel ID.
+# Created by: cloudflared tunnel create studio-os  (prints the ID and writes the credentials file)
+tunnel: studio-os
+credentials-file: /Users/YOU/.cloudflared/TUNNEL-ID.json
+
+ingress:
+  # Web app (owner dashboard + client gallery, contract, invoice and booking pages)
+  - hostname: studio.example.com
+    service: http://localhost:3000
+  # API
+  - hostname: api.example.com
+    service: http://localhost:3001
+  # Media, through scripts/media-gateway.mjs, never MinIO's own port 9000.
+  # Cloudflare forwards the public Host header, which presigned links are signed for.
+  - hostname: media.example.com
+    service: http://localhost:9010
+  - service: http_status:404

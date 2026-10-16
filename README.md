@@ -76,6 +76,36 @@ Password-reset emails require Resend. Failed delivery is reported in logs withou
 
 For deployment, set a strong `AUTH_SECRET`, the real `WEB_APP_URL`, `NEXT_PUBLIC_API_URL` at web build time, explicit `CORS_ORIGINS`, and the appropriate `TRUST_PROXY`. Local container credentials are demo settings, not production credentials. The setup helper deliberately refuses remote Postgres URLs; provision and migrate hosted databases through a separate deployment procedure.
 
+## Serving clients from this Mac (Cloudflare Tunnel)
+
+Until there is a hosted deployment, clients reach galleries, contracts, invoices and the booking page through a named Cloudflare Tunnel from this Mac. Three hostnames on a domain in your Cloudflare account point at three local services; nothing listens on a public port.
+
+| Hostname | Local service |
+| --- | --- |
+| `studio.<domain>` | web, production build (3000) |
+| `api.<domain>` | API, production build (3001) |
+| `media.<domain>` | `scripts/media-gateway.mjs` (9010), in front of MinIO (9000) |
+
+MinIO itself is never published: its admin login is the demo value in `.env.example`. The gateway lets through only anonymous reads of `previews/*`, CORS preflights, and object reads/writes presigned with a limited browser key that cannot list, delete or administer (`scripts/create-browser-key.sh`). `R2_PUBLIC_ENDPOINT` makes the API sign browser links for the media hostname with that key and derive public preview URLs from it (`R2_PUBLIC_URL` is ignored while it is set); server-side storage calls still use the local endpoint. The gateway also refuses every `x-amz-*` (except content-sha256) and `x-minio-*` request header, since a browser sends none.
+
+One-time setup:
+
+```bash
+brew install cloudflared
+cloudflared tunnel login                 # browser: pick the domain
+cloudflared tunnel create studio-os      # prints the tunnel ID
+cloudflared tunnel route dns studio-os studio.<domain>
+cloudflared tunnel route dns studio-os api.<domain>
+cloudflared tunnel route dns studio-os media.<domain>
+# merge scripts/cloudflared-config.example.yml into ~/.cloudflared/config.yml (back up any existing file); fill in domain and ID
+cp .env.public.example .env.public                                     # fill in domain
+docker start studio_os_minio && scripts/create-browser-key.sh   # adds the limited key to .env.public
+```
+
+Then `scripts/serve-public.sh start` (and `stop` / `status`). It refuses to start while any account still uses the seed password, while URLs point at localhost, or without the limited key; builds production bundles; starts gateway, API, web and tunnel; and keeps the Mac from sleeping while the API runs (on AC power; a closed lid or battery can still sleep it). `scripts/serve-public.sh start --local` rehearses everything except the tunnel. Stop `npm run dev:local` first (same ports). After a reboot: `colima start`, then start again. Re-running `create-browser-key.sh` rotates the key: restart with `stop` then `start` so the API signs with the new secret. `serve-public.sh` refuses to start if the tunnel config points a hostname at MinIO (9000) or Postgres (5433).
+
+Limits: the Mac must be on, awake and online for clients to reach anything. Cloudflare's free plan caps a single request at 100 MB, so uploads larger than that fail through the tunnel. Emails (Resend) and card payments (Stripe) stay off until configured: copy client links by hand and record payments with **Mark paid**. Public sign-up is closed with `REGISTRATION_OPEN="false"` in `.env.public` (the readiness check requires it to be set, either way); existing accounts still log in. To add a studio later, set it to `true`, restart, register, and set it back. Left unset (local development), `/register` stays open.
+
 ## Develop
 
 Use `npm run dev:local` for the checked startup path. `npm run dev` remains available when backing services and migrations are already ready.
