@@ -41,3 +41,5 @@ yarn-error.log*
 # Public serving (scripts/serve-public.sh)
 .env.public
 .public-run/
+.env.public.*
+!.env.public.example

@@ -97,12 +97,12 @@ cloudflared tunnel create studio-os      # prints the tunnel ID
 cloudflared tunnel route dns studio-os studio.<domain>
 cloudflared tunnel route dns studio-os api.<domain>
 cloudflared tunnel route dns studio-os media.<domain>
-cp scripts/cloudflared-config.example.yml ~/.cloudflared/config.yml   # fill in domain and ID
+# merge scripts/cloudflared-config.example.yml into ~/.cloudflared/config.yml (back up any existing file); fill in domain and ID
 cp .env.public.example .env.public                                     # fill in domain
-scripts/create-browser-key.sh            # adds the limited key to .env.public
+docker start studio_os_minio && scripts/create-browser-key.sh   # adds the limited key to .env.public
 ```
 
-Then `scripts/serve-public.sh start` (and `stop` / `status`). It refuses to start while any account still uses the seed password, while URLs point at localhost, or without the limited key; builds production bundles; starts gateway, API, web and tunnel; and keeps the Mac awake while the API runs. `scripts/serve-public.sh start --local` rehearses everything except the tunnel. Stop `npm run dev:local` first (same ports). After a reboot: `colima start`, then start again.
+Then `scripts/serve-public.sh start` (and `stop` / `status`). It refuses to start while any account still uses the seed password, while URLs point at localhost, or without the limited key; builds production bundles; starts gateway, API, web and tunnel; and keeps the Mac from sleeping while the API runs (on AC power; a closed lid or battery can still sleep it). `scripts/serve-public.sh start --local` rehearses everything except the tunnel. Stop `npm run dev:local` first (same ports). After a reboot: `colima start`, then start again. Re-running `create-browser-key.sh` rotates the key: restart with `stop` then `start` so the API signs with the new secret. `serve-public.sh` refuses to start if the tunnel config points a hostname at MinIO (9000) or Postgres (5433).
 
 Limits: the Mac must be on, awake and online for clients to reach anything. Cloudflare's free plan caps a single request at 100 MB, so uploads larger than that fail through the tunnel. Emails (Resend) and card payments (Stripe) stay off until configured: copy client links by hand and record payments with **Mark paid**. Sign-up at `/register` stays open on the public site.
 

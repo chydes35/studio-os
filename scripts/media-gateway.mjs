@@ -9,6 +9,7 @@
 // public hostname, and MinIO checks the signature against the Host it receives.
 
 import http from 'node:http';
+import { pipeline } from 'node:stream';
 import { checkMediaRequest } from './media-gateway-lib.mjs';
 
 const port = Number(process.env.MEDIA_GATEWAY_PORT ?? 9010);
@@ -20,7 +21,7 @@ if (!bucket || !browserAccessKey) {
   console.error('media-gateway: R2_BUCKET_NAME and R2_PRESIGN_ACCESS_KEY_ID are required');
   process.exit(1);
 }
-if (!['127.0.0.1', 'localhost', '::1'].includes(upstream.hostname)) {
+if (!['127.0.0.1', 'localhost', '[::1]', '::1'].includes(upstream.hostname)) {
   console.error('media-gateway: MEDIA_GATEWAY_UPSTREAM must be a local MinIO address');
   process.exit(1);
 }
@@ -46,15 +47,18 @@ const server = http.createServer((req, res) => {
     },
     (upstreamRes) => {
       res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
-      upstreamRes.pipe(res);
+      // pipeline tears down both sides if either ends early (browsers abort
+      // range requests constantly), so no upstream socket is left open.
+      pipeline(upstreamRes, res, () => {});
     },
   );
   proxied.on('error', (err) => {
     console.error(`media-gateway: upstream error: ${err.message}`);
-    if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
-    res.end('storage unavailable\n');
+    if (res.headersSent) return res.destroy();
+    res.writeHead(502, { 'content-type': 'text/plain' }).end('storage unavailable\n');
   });
-  req.pipe(proxied);
+  pipeline(req, proxied, () => {});
+  res.on('close', () => proxied.destroy());
 });
 
 server.listen(port, '127.0.0.1', () => {

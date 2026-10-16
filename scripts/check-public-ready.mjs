@@ -20,25 +20,40 @@ const problems = [];
 
 const SEED_PASSWORD = 'devpassword123';
 
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
+const isLoopback = (url) => LOOPBACK.has(url.hostname) || url.hostname.endsWith('.localhost');
+
 function requireUrl(name, { https = !local } = {}) {
   const value = env[name];
-  if (!value) return problems.push(`${name} is not set`);
+  if (!value) {
+    problems.push(`${name} is not set`);
+    return undefined;
+  }
   let url;
   try {
     url = new URL(value);
   } catch {
-    return problems.push(`${name} is not a URL: ${value}`);
+    problems.push(`${name} is not a URL: ${value}`);
+    return undefined;
   }
   if (https && url.protocol !== 'https:') problems.push(`${name} must be https:// for public use (got ${value})`);
-  if (!local && ['localhost', '127.0.0.1'].includes(url.hostname)) problems.push(`${name} still points at ${url.hostname}`);
+  if (!local && isLoopback(url)) problems.push(`${name} still points at ${url.hostname}`);
   return url;
 }
 
 requireUrl('WEB_APP_URL');
 requireUrl('NEXT_PUBLIC_API_URL');
 const mediaEndpoint = requireUrl('R2_PUBLIC_ENDPOINT');
-if (env.R2_PUBLIC_URL && mediaEndpoint && !env.R2_PUBLIC_URL.startsWith(mediaEndpoint.origin)) {
-  problems.push('R2_PUBLIC_URL must live on R2_PUBLIC_ENDPOINT so previews go through the media gateway');
+if (mediaEndpoint) {
+  let previewOrigin;
+  try {
+    previewOrigin = new URL(env.R2_PUBLIC_URL ?? '').origin;
+  } catch {
+    problems.push('R2_PUBLIC_URL is not set or not a URL');
+  }
+  if (previewOrigin !== undefined && previewOrigin !== mediaEndpoint.origin) {
+    problems.push('R2_PUBLIC_URL must live on R2_PUBLIC_ENDPOINT so previews go through the media gateway');
+  }
 }
 if (env.CORS_ORIGINS !== env.WEB_APP_URL && !local) {
   problems.push('CORS_ORIGINS should be exactly WEB_APP_URL for public use');

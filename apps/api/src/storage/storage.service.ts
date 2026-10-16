@@ -40,11 +40,16 @@ export class StorageService {
     if (Boolean(presignAccessKeyId) !== Boolean(presignSecret)) {
       throw new Error('Set both R2_PRESIGN_ACCESS_KEY_ID and R2_PRESIGN_SECRET_ACCESS_KEY, or neither');
     }
+    if (publicEndpoint && !presignAccessKeyId) {
+      // Falling back to the main key would hand browsers admin-signed links.
+      throw new Error('R2_PUBLIC_ENDPOINT requires R2_PRESIGN_ACCESS_KEY_ID and R2_PRESIGN_SECRET_ACCESS_KEY');
+    }
     this.presignClient =
       publicEndpoint || presignAccessKeyId
         ? StorageService.createClient(
             publicEndpoint || resolvedEndpoint,
-            Boolean(endpoint),
+            // The media gateway only understands path-style URLs.
+            Boolean(endpoint) || Boolean(publicEndpoint),
             presignAccessKeyId || accessKeyId,
             presignSecret || secretAccessKey,
           )
