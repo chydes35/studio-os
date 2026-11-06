@@ -1,0 +1,4 @@
+# Reviewed 2026-11-03: false positives (test strings, public keys/fingerprints, placeholder tokens)
+5d91d7139bc1d74cf903cf02a62c298430e8f27a:apps/api/README.md:generic-api-key:5
+e7dc52020e966e23a64e8337cc3161ae993c2f5c:docs/superpowers/plans/2026-10-15-perception-edit-send-action.md:generic-api-key:2864
+e7dc52020e966e23a64e8337cc3161ae993c2f5c:docs/superpowers/plans/2026-10-15-perception-edit-send-action.md:generic-api-key:2864
